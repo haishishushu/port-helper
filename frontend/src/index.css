@@ -1,0 +1,256 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* 设计稿变量（prd/ui/port-helper.pen），浅色 */
+:root {
+  --bg: #ffffff;
+  --bg-sidebar: #f7f7f6;
+  --surface: #ffffff;
+  --surface-muted: #f4f4f3;
+  --surface-hover: #ededec;
+  --line: #e7e7e5;
+  --line-strong: #d5d5d2;
+  --text-primary: #111111;
+  --text-secondary: #5c5c5a;
+  --text-tertiary: #8e8e8b;
+  --ink: #111111;
+  --on-ink: #ffffff;
+  --danger: #c8322b;
+  --danger-bg: #fdf1f0;
+  --danger-border: #f3c9c5;
+  --danger-solid: #c8322b;
+  --success: #18794e;
+  --success-bg: #eef8f2;
+  --warning: #a15c07;
+  --warning-bg: #fdf6e9;
+  --warning-border: #f0ddb5;
+  --info: #2f5fd0;
+  --info-bg: #eef3fd;
+  --overlay: rgb(17 17 17 / 0.32);
+  /* 刷新柔光：白底上白色高光看不见，浅色主题用一道极淡的深色柔影 */
+  --refresh-shimmer: rgb(15 15 20 / 0.11);
+  --radius: 0.625rem;
+}
+
+/* 深色 */
+.dark {
+  --bg: #181818;
+  --bg-sidebar: #111111;
+  --surface: #1f1f1f;
+  --surface-muted: #262626;
+  --surface-hover: #2c2c2c;
+  --line: #2b2b2b;
+  --line-strong: #3a3a3a;
+  --text-primary: #ededed;
+  --text-secondary: #a1a1a1;
+  --text-tertiary: #6f6f6f;
+  --ink: #ededed;
+  --on-ink: #111111;
+  --danger: #f2766b;
+  --danger-bg: #2b1816;
+  --danger-border: #4a2622;
+  --danger-solid: #d64b42;
+  --success: #4cc38a;
+  --success-bg: #132219;
+  --warning: #f5b544;
+  --warning-bg: #2a2010;
+  --warning-border: #4a3a1a;
+  --info: #7aa2f7;
+  --info-bg: #16203a;
+  --overlay: rgb(0 0 0 / 0.65);
+  /* 深色主题反过来用白色柔光，深底上更显眼，取值略低 */
+  --refresh-shimmer: rgb(255 255 255 / 0.09);
+}
+
+/* shadcn 语义变量映射到设计稿变量 */
+:root,
+.dark {
+  --background: var(--bg);
+  --foreground: var(--text-primary);
+  --card: var(--surface);
+  --card-foreground: var(--text-primary);
+  --popover: var(--surface);
+  --popover-foreground: var(--text-primary);
+  --primary: var(--ink);
+  --primary-foreground: var(--on-ink);
+  --secondary: var(--surface-muted);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--surface-muted);
+  --muted-foreground: var(--text-secondary);
+  --accent: var(--surface-hover);
+  --accent-foreground: var(--text-primary);
+  --destructive: var(--danger-solid);
+  --border: var(--line);
+  --input: var(--line-strong);
+  --ring: var(--text-tertiary);
+}
+
+@theme inline {
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Mono", "Cascadia Code", Consolas, monospace;
+
+  --color-bg: var(--bg);
+  --color-sidebar: var(--bg-sidebar);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-hover: var(--surface-hover);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--text-primary);
+  --color-fg-2: var(--text-secondary);
+  --color-fg-3: var(--text-tertiary);
+  --color-ink: var(--ink);
+  --color-on-ink: var(--on-ink);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-danger-border: var(--danger-border);
+  --color-danger-solid: var(--danger-solid);
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-warning-border: var(--warning-border);
+  --color-info: var(--info);
+  --color-info-bg: var(--info-bg);
+  --color-overlay: var(--overlay);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply overflow-hidden bg-bg font-sans text-fg antialiased select-none;
+  }
+  /* 路径、命令行等允许选中复制 */
+  .selectable {
+    @apply select-text;
+  }
+  /* Windows 触控 / 笔拖动窗口 */
+  *[data-tauri-drag-region] {
+    app-region: drag;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background-clip: content-box;
+    background-color: var(--line-strong);
+  }
+}
+
+/* ========== 刷新反馈 ==========
+   动画恒为 infinite，停止交给 JS 在轮次边界摘除（lib/motion.ts useCycleExit）：
+   边界处柔光在卡外且透明、图标转满整圈，摘除无跳变。只动 transform / opacity，走合成层不占主线程。 */
+@keyframes refresh-shimmer {
+  from {
+    transform: translateX(-130%) skewX(-18deg);
+    opacity: 0;
+  }
+  16% {
+    opacity: 1;
+  }
+  84% {
+    opacity: 1;
+  }
+  to {
+    transform: translateX(250%) skewX(-18deg);
+    opacity: 0;
+  }
+}
+
+@keyframes refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 裁剪层：border-radius: inherit 自动贴合卡片圆角，不需要给卡片本身加 overflow-hidden */
+.refresh-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* 峰值做成一段平台（36%~64%），读起来才是“一道掠过的光”而不是一抹灰 */
+.refresh-shimmer {
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 45%;
+  background: linear-gradient(90deg, transparent 0%, var(--refresh-shimmer) 36%, var(--refresh-shimmer) 64%, transparent 100%);
+  animation: refresh-shimmer 1100ms linear infinite;
+  will-change: transform, opacity;
+}
+
+.refresh-spin {
+  animation: refresh-spin 700ms linear infinite;
+  will-change: transform;
+}
+
+/* 刷新是用户主动操作，完全没有反馈会让人不确定点没点上：减少动态效果时改为静态淡色遮罩 */
+@media (prefers-reduced-motion: reduce) {
+  .refresh-shimmer {
+    animation: none;
+    transform: none;
+    width: 100%;
+    background: var(--refresh-shimmer);
+  }
+  .refresh-spin {
+    animation: none;
+  }
+}
+
+/* 正常关闭等待进度条：一次性线性动画，不需要 JS 逐帧更新 */
+@keyframes close-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.close-progress {
+  transform-origin: left center;
+  animation-name: close-progress;
+  animation-timing-function: linear;
+  animation-fill-mode: both;
+}

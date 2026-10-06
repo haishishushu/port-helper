@@ -1,0 +1,51 @@
+# ========== 依赖 ==========
+node_modules/
+.pnpm-store/
+
+# ========== 构建与打包产物 ==========
+# 前端 Vite 构建输出
+frontend/dist/
+# Rust 编译输出，包括安装包 target/release/bundle/（.exe / .msi）
+backend/target/
+# Tauri 自动生成的权限 schema（构建时重新生成）
+backend/gen/schemas/
+# TypeScript 增量构建缓存
+*.tsbuildinfo
+# Vite 缓存
+.vite/
+
+# ========== Rust ==========
+**/*.rs.bk
+*.pdb
+
+# ========== 日志与调试 ==========
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ========== 测试与覆盖率 ==========
+coverage/
+*.lcov
+
+# ========== 环境变量与密钥（防止泄露） ==========
+.env
+.env.*
+!.env.example
+# Tauri 更新器 / 代码签名私钥（后续接入自动更新时使用）
+*.key
+*.pfx
+
+# ========== 编辑器与本地工具 ==========
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*~
+.claude/settings.local.json
+
+# ========== 操作系统 ==========
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -1,0 +1,4 @@
+# ts-rs：把与前端共享的类型导出到前端源码目录（cargo test 时生成）
+[env]
+TS_RS_EXPORT_DIR = { value = "../frontend/src/bindings/", relative = true }
+TS_RS_LARGE_INT = "number"
