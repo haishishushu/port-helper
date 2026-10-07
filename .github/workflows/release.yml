@@ -1,0 +1,195 @@
+# 每次推送到 master：构建安装包 → 把新版本号提交回仓库 → 打 tag 并发布 GitHub Release
+# 版本号 = 最近一次成功发布的 tag + 1：0.1.0 ~ 0.1.100 → 0.2.0 ~ 0.2.100 → …
+# 只有发布成功才会产生 tag，构建失败或被更新的提交取代时不占号，因此不会跳号
+name: release
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+# 串行执行，避免两次运行算出同一个版本号
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    if: github.ref_name == 'master'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.calc.outputs.version }}
+      skip: ${{ steps.calc.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - id: calc
+        name: 计算版本号
+        run: |
+          latest=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          if [ -z "$latest" ]; then
+            version=0.1.0
+          else
+            IFS=. read -r major minor patch <<< "${latest#v}"
+            if [ "$patch" -ge 100 ]; then minor=$((minor + 1)); patch=0; else patch=$((patch + 1)); fi
+            version="$major.$minor.$patch"
+          fi
+          # 当前提交已经发布过（例如没有新提交时手动触发），不再发新版本
+          skip=false
+          if [ -n "$latest" ] && [ "$(git rev-list -n1 "$latest")" = "$(git rev-parse HEAD)" ]; then
+            skip=true
+            echo "::notice::当前提交已发布为 $latest，跳过"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
+          echo "上一版本：${latest:-无}，本次版本：$version"
+
+  build:
+    needs: version
+    if: needs.version.outputs.skip != 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            args: ''
+          # 后端目前只实现了 Windows（直接调用 Win32 API），移植完成后取消下面的注释，
+          # 并把 tauri.conf.json 的 bundle.targets 从 ["nsis"] 改为 "all"
+          # - platform: macos-latest # Apple 芯片
+          #   args: '--target aarch64-apple-darwin'
+          # - platform: macos-latest # Intel 芯片
+          #   args: '--target x86_64-apple-darwin'
+          # - platform: ubuntu-22.04
+          #   args: ''
+    runs-on: ${{ matrix.platform }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: 写入版本号
+        run: node scripts/set-version.mjs "${{ needs.version.outputs.version }}"
+
+      # 签名开关：在仓库 Secrets 中配置 WINDOWS_SIGN_COMMAND 即启用，未配置则不签名
+      # 命令中用 %1 代表待签名文件，例如：artifact-signing-cli -e <endpoint> -a <账户> -c <证书配置> %1
+      # 选定签名服务后，还需在此之前加一步安装对应签名工具，并把凭据从 Secrets 传入环境变量
+      - name: 配置代码签名
+        if: runner.os == 'Windows'
+        env:
+          SIGN_COMMAND: ${{ secrets.WINDOWS_SIGN_COMMAND }}
+        run: |
+          if [ -z "$SIGN_COMMAND" ]; then
+            echo "::warning::未配置 WINDOWS_SIGN_COMMAND，本次安装包不签名"
+            exit 0
+          fi
+          node -e '
+            const fs = require("fs");
+            const file = "backend/tauri.conf.json";
+            const conf = JSON.parse(fs.readFileSync(file, "utf8"));
+            conf.bundle.windows = { ...conf.bundle.windows, signCommand: process.env.SIGN_COMMAND };
+            fs.writeFileSync(file, JSON.stringify(conf, null, 2));
+          '
+          echo "已启用代码签名"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            frontend/pnpm-lock.yaml
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: backend -> target
+
+      - name: 安装 Linux 系统依赖
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+
+      - name: 安装前端依赖
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --dir frontend install --frozen-lockfile
+
+      - name: 构建安装包
+        run: pnpm tauri build ${{ matrix.args }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: bundle-${{ strategy.job-index }}
+          if-no-files-found: error
+          path: |
+            backend/target/**/release/bundle/nsis/*.exe
+            backend/target/**/release/bundle/msi/*.msi
+            backend/target/**/release/bundle/dmg/*.dmg
+            backend/target/**/release/bundle/deb/*.deb
+            backend/target/**/release/bundle/rpm/*.rpm
+            backend/target/**/release/bundle/appimage/*.AppImage
+
+  release:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: bundle-*
+          path: dist
+          merge-multiple: true
+
+      - name: 提交版本号并发布 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          tag="v$VERSION"
+          message="chore(release): $tag [skip ci]"
+          remote=$(git rev-parse origin/master)
+
+          if [ "$remote" = "$GITHUB_SHA" ]; then
+            # 正常情况：把版本号提交回 master
+            node scripts/set-version.mjs "$VERSION"
+            if ! git diff --quiet; then
+              git config user.name "github-actions[bot]"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+              git commit -am "$message"
+              git push origin HEAD:master
+            fi
+            target=$(git rev-parse HEAD)
+          elif [ "$(git rev-parse "$remote^")" = "$GITHUB_SHA" ] && [ "$(git log -1 --format=%s "$remote")" = "$message" ]; then
+            # 重跑：上次已推送版本号提交，但 Release 没发成功
+            target=$remote
+          else
+            # master 上已有更新的提交，交给那次运行发布同一个版本号
+            echo "::notice::master 已有更新的提交，本次不发布，$tag 由最新提交的运行发布"
+            exit 0
+          fi
+
+          mapfile -t files < <(find dist -type f)
+          if gh release view "$tag" > /dev/null 2>&1; then
+            gh release upload "$tag" "${files[@]}" --clobber
+          else
+            gh release create "$tag" "${files[@]}" --target "$target" --title "port-helper $tag" --generate-notes
+          fi
