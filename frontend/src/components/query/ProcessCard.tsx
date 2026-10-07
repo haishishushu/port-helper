@@ -8,6 +8,7 @@ import { RefreshVeil } from "@/components/query/Refresh";
 import { Tag, type TagTone } from "@/components/query/Tag";
 import { localEndpoint, remoteEndpoint, stateLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { platform } from "@/lib/platform";
 
 const STATE_TONE: Partial<Record<SocketState, TagTone>> = { listen: "success", established: "info" };
 
@@ -35,7 +36,7 @@ export function KindTag({ process }: { process: ProcessSummary }) {
     case "forwarder":
       return <Tag tone="warning" mono={false}>端口转发</Tag>;
     case "service":
-      return <Tag mono={false}>Windows 服务</Tag>;
+      return <Tag mono={false}>{platform.serviceTag}</Tag>;
     default:
       return null;
   }

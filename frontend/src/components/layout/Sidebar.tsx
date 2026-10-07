@@ -2,6 +2,7 @@ import { ArrowUpRight, PlugZap, ScanSearch, Search, Settings, Shield, ShieldChec
 import { usePrivilege } from "@/hooks/use-privilege";
 import { useRelaunchAdmin } from "@/hooks/use-relaunch";
 import { cn } from "@/lib/utils";
+import { platform } from "@/lib/platform";
 
 export type View = "port" | "pid" | "settings";
 
@@ -27,11 +28,11 @@ function PermissionRow() {
   return (
     <div className="flex items-center gap-2 px-2.5 py-[7px]">
       {elevated ? <ShieldCheck className="size-3.5 shrink-0 text-success" /> : <Shield className="size-3.5 shrink-0 text-fg-3" />}
-      <span className="flex-1 truncate text-xs text-fg-2">{elevated ? "管理员权限运行" : "普通权限运行"}</span>
+      <span className="flex-1 truncate text-xs text-fg-2">{elevated ? `${platform.admin}权限运行` : "普通权限运行"}</span>
       {!elevated && (
         <button
           onClick={requestRelaunch}
-          title="以管理员身份重新启动"
+          title={`以${platform.admin}身份重新启动`}
           className="flex shrink-0 items-center gap-0.5 text-xs text-fg-3 transition-colors hover:text-fg"
         >
           <ArrowUpRight className="size-[11px]" />

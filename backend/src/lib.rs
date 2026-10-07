@@ -1,6 +1,8 @@
 pub mod commands;
+#[cfg(windows)]
 pub mod console;
 pub mod error;
+#[cfg(windows)]
 pub mod memory;
 pub mod model;
 pub mod net;
@@ -9,6 +11,7 @@ pub mod privilege;
 pub mod process;
 pub mod query;
 
+#[cfg(windows)]
 use tauri::WindowEvent;
 use tauri_plugin_log::{Target, TargetKind};
 
@@ -34,9 +37,10 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_store::Builder::default().build())
-        .on_window_event(|window, event| {
-            if let WindowEvent::Resized(_) = event {
-                memory::sync_with_window(window);
+        .on_window_event(|_window, _event| {
+            #[cfg(windows)]
+            if let WindowEvent::Resized(_) = _event {
+                memory::sync_with_window(_window);
             }
         })
         .invoke_handler(tauri::generate_handler![

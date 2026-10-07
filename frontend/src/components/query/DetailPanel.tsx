@@ -9,6 +9,7 @@ import { useRelaunchAdmin } from "@/hooks/use-relaunch";
 import { formatDateTime, formatUptime } from "@/lib/format";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
+import { OS, platform } from "@/lib/platform";
 
 const copy = (text: string, label: string) =>
   navigator.clipboard.writeText(text).then(() => notify.success(`已复制${label}`));
@@ -17,12 +18,18 @@ const copy = (text: string, label: string) =>
 export function processNote(d: ProcessDetail): { tone: "warning" | "info"; icon: typeof Info; text: string } | null {
   const ancestors = d.parentChain.slice(0, -1).map((p) => p.name.toLowerCase());
   if (d.kind === "service" && d.services.length > 0)
-    return { tone: "info", icon: Info, text: `这是 Windows 服务 ${d.services.join("、")}，建议在“服务”中停止。` };
+    return { tone: "info", icon: Info, text: platform.serviceHint(d.services) };
+  if (OS === "macos" && d.name.toLowerCase() === "controlcenter")
+    return {
+      tone: "info",
+      icon: Info,
+      text: "这是 macOS 的“AirPlay 接收器”，结束后会被系统自动重新拉起。请在“系统设置 → 通用 → 隔空播放与接力”中关闭“AirPlay 接收器”。",
+    };
   if (d.kind === "forwarder")
     return { tone: "warning", icon: Info, text: `${d.name} 是端口转发进程，建议停止对应的容器或在 WSL 内处理。` };
   if (ancestors.some((n) => n.startsWith("idea")))
     return { tone: "info", icon: Info, text: "该进程由 IntelliJ IDEA 启动，在 IDE 中停止运行更稳妥。" };
-  if (ancestors.includes("node.exe"))
+  if (ancestors.includes("node.exe") || ancestors.includes("node"))
     return { tone: "warning", icon: RotateCcw, text: "该进程由 Node.js 工具（如 npm）启动。若父进程带自动重启（如 nodemon），结束后可能被重新拉起。" };
   return null;
 }
@@ -44,7 +51,7 @@ function Field({ label, value, mono = true, copyLabel }: { label: string; value:
       {value ? (
         <span className={cn("selectable text-[12.5px] leading-normal break-all", mono && "font-mono")}>{value}</span>
       ) : (
-        <span className="text-[12.5px] text-fg-3">{elevated ? "无法读取" : "需要管理员权限才能读取"}</span>
+        <span className="text-[12.5px] text-fg-3">{elevated ? "无法读取" : `需要${platform.admin}权限才能读取`}</span>
       )}
     </div>
   );
@@ -164,7 +171,7 @@ export function DetailPanel({ detail, port, showAllPortsLink, onShowAllPorts, on
                 {detail.blockedReason}
                 {!elevated && (
                   <button onClick={requestRelaunch} className="ml-1 font-medium underline">
-                    以管理员身份重新启动
+                    以{platform.admin}身份重新启动
                   </button>
                 )}
               </Note>

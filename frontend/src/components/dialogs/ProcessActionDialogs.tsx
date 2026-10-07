@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import type { ActionHandlers, ActionTarget, Step } from "@/hooks/use-process-actions";
 import { formatDateTime } from "@/lib/format";
 import { notify } from "@/lib/notify";
+import { platform } from "@/lib/platform";
 
 const procLabel = (t: ActionTarget) => `${t.process.name} · PID ${t.process.pid}`;
 
@@ -45,7 +46,7 @@ function ClosingDialog({ step, h }: { step: Extract<Step, { kind: "closing" }>; 
   const t = step.target;
   const rows: InfoRow[] = [
     { icon: CircleCheck, label: "校验 PID 与启动时间", value: "通过" },
-    { icon: CircleCheck, label: "发送关闭信号（窗口关闭 / Ctrl+C）", value: "已发送" },
+    { icon: CircleCheck, label: platform.closeSignal, value: "已发送" },
     { icon: Loader, label: "等待进程退出", value: `剩余 ${remain} 秒` },
   ];
   return (
@@ -89,7 +90,7 @@ function CriticalDialog({ step, h }: { step: Extract<Step, { kind: "critical" }>
       onClose={h.cancel}
       tone="danger"
       icon={ShieldAlert}
-      title="这是 Windows 关键进程"
+      title={platform.criticalTitle}
       description={`${step.next === "close" ? "关闭" : "结束"} ${t.process.name} 可能导致系统不稳定、立即重启或无法登录。除非你非常清楚后果，否则请不要继续。`}
       rows={[
         { icon: Cpu, label: "进程", value: procLabel(t) },
@@ -194,7 +195,7 @@ export function ProcessActionDialogs({ step, busy, handlers: h }: { step: Step |
           tone="neutral"
           icon={Power}
           title={`关闭 ${t.process.appName}？`}
-          description="会先请求进程自行退出（有窗口的发送关闭消息，控制台进程发送 Ctrl+C），超时仍未退出时，再询问是否强制结束。"
+          description={`会先请求进程自行退出（${platform.closeHow}），超时仍未退出时，再询问是否强制结束。`}
           rows={targetRows(t)}
           actions={
             <>

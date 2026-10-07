@@ -1,4 +1,5 @@
-//! 进程信息读取：sysinfo 负责名称/路径/命令行/工作目录，Win32 负责父 PID 与精确的创建时间。
+//! 进程信息读取：sysinfo 负责名称/路径/命令行/工作目录，父 PID、映像名与创建时间按平台实现
+//! （Windows 走 Win32 拿到毫秒精度，macOS / Linux 走 sysinfo 单进程刷新）。
 //!
 //! 性能要点（prd/todo/perf-todo.md P1-4）：任何“全量枚举进程”在 Windows 上都要约 7ms，
 //! 所以每次查询只允许枚举一次。父进程链不靠全量枚举，而是对目标进程逐级查询父 PID，
@@ -6,26 +7,27 @@
 
 pub mod classify;
 pub mod services;
+#[cfg(unix)]
+mod unix;
+#[cfg(windows)]
+mod windows;
 
 use std::collections::{HashMap, HashSet};
-use std::os::windows::ffi::OsStringExt;
 
 use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
-use windows::core::PWSTR;
-use windows::Wdk::System::Threading::{NtQueryInformationProcess, ProcessBasicInformation};
-use windows::Win32::Foundation::{CloseHandle, FILETIME, HANDLE};
-use windows::Win32::System::Threading::{
-    GetProcessTimes, OpenProcess, QueryFullProcessImageNameW, PROCESS_BASIC_INFORMATION, PROCESS_NAME_WIN32,
-    PROCESS_QUERY_LIMITED_INFORMATION,
-};
 
-use crate::error::{is_invalid_parameter, AppError, AppResult};
 use crate::model::{ParentLink, ProcessDetail, ProcessSummary};
 use classify::{classify, ClassifyInput};
+#[cfg(unix)]
+pub use self::unix::{image_name, pseudo_name, start_time};
+#[cfg(unix)]
+use self::unix::parent_pid;
+#[cfg(windows)]
+pub use self::windows::{image_name, pseudo_name, start_time};
+#[cfg(windows)]
+use self::windows::parent_pid;
 
 const MAX_PARENT_DEPTH: usize = 6;
-/// 1601-01-01 到 1970-01-01 的 100ns 间隔数
-const FILETIME_UNIX_EPOCH: u64 = 116_444_736_000_000_000;
 
 /// 一次查询内共享的进程快照，只包含目标进程及其祖先。
 pub struct ProcessCatalog {
@@ -63,19 +65,19 @@ impl ProcessCatalog {
                     .with_cwd(UpdateKind::OnlyIfNotSet),
             );
         }
-        Self { sys, services: services::service_map(), self_pid: std::process::id() }
+        let pids: Vec<u32> = wanted.iter().map(|p| p.as_u32()).collect();
+        Self { sys, services: services::service_map(&pids), self_pid: std::process::id() }
     }
 
     pub fn exists(&self, pid: u32) -> bool {
-        pid == 0 || pid == 4 || self.sys.process(Pid::from_u32(pid)).is_some()
+        pseudo_name(pid).is_some() || self.sys.process(Pid::from_u32(pid)).is_some()
     }
 
     pub fn name(&self, pid: u32) -> String {
-        match self.sys.process(Pid::from_u32(pid)) {
-            Some(p) => p.name().to_string_lossy().into_owned(),
-            None if pid == 0 => "System Idle Process".into(),
-            None if pid == 4 => "System".into(),
-            None => format!("PID {pid}"),
+        match (self.sys.process(Pid::from_u32(pid)), pseudo_name(pid)) {
+            (Some(p), _) => p.name().to_string_lossy().into_owned(),
+            (None, Some(name)) => name.into(),
+            (None, None) => format!("PID {pid}"),
         }
     }
 
@@ -115,10 +117,10 @@ impl ProcessCatalog {
             port_hint,
             self_pid: self.self_pid,
         });
-        let start_time = if pid == 0 || pid == 4 { None } else { start_time(pid).ok().flatten() };
+        let start_time = if pseudo_name(pid).is_some() { None } else { start_time(pid).ok().flatten() };
         // 读不到启动时间就无法做 PID 复用校验，不允许操作
         let (actionable, blocked_reason) = if c.actionable && start_time.is_none() {
-            (false, Some("无法读取进程启动时间，可能需要管理员权限".to_string()))
+            (false, Some(format!("无法读取进程启动时间，可能需要{}权限", crate::privilege::ADMIN_TERM)))
         } else {
             (c.actionable, c.blocked_reason)
         };
@@ -136,7 +138,7 @@ impl ProcessCatalog {
         }
     }
 
-    /// 进程详情；`port_hint` 用于区分 PID 4 是 HTTP.sys 还是 SMB。
+    /// 进程详情；`port_hint` 用于区分 Windows 上 PID 4 是 HTTP.sys 还是 SMB。
     pub fn detail(&self, pid: u32, port_hint: Option<u16>) -> ProcessDetail {
         let command_line = self.command_line(pid);
         ProcessDetail {
@@ -165,69 +167,5 @@ impl ProcessCatalog {
         }
         chain.reverse();
         chain
-    }
-}
-
-fn open_limited(pid: u32) -> AppResult<Option<HANDLE>> {
-    unsafe {
-        match OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) {
-            Ok(h) => Ok(Some(h)),
-            Err(e) if is_invalid_parameter(&e) => Ok(None),
-            Err(e) => Err(AppError::win32("OpenProcess", &e)),
-        }
-    }
-}
-
-/// 父进程 PID（只查询单个进程，不做全量枚举）；读不到时返回 None。
-fn parent_pid(pid: u32) -> Option<u32> {
-    if pid == 4 {
-        return None;
-    }
-    let handle = open_limited(pid).ok().flatten()?;
-    unsafe {
-        let mut info = PROCESS_BASIC_INFORMATION::default();
-        let status = NtQueryInformationProcess(
-            handle,
-            ProcessBasicInformation,
-            &mut info as *mut _ as *mut _,
-            std::mem::size_of::<PROCESS_BASIC_INFORMATION>() as u32,
-            std::ptr::null_mut(),
-        );
-        let _ = CloseHandle(handle);
-        let parent = info.InheritedFromUniqueProcessId as u32;
-        (status.is_ok() && parent != 0).then_some(parent)
-    }
-}
-
-/// 进程映像文件名（如 `lsass.exe`），只打开单个进程。进程不存在返回 `Ok(None)`。
-pub fn image_name(pid: u32) -> AppResult<Option<String>> {
-    let Some(handle) = open_limited(pid)? else { return Ok(None) };
-    unsafe {
-        let mut buf = [0u16; 1024];
-        let mut len = buf.len() as u32;
-        let result = QueryFullProcessImageNameW(handle, PROCESS_NAME_WIN32, PWSTR(buf.as_mut_ptr()), &mut len);
-        let _ = CloseHandle(handle);
-        result.map_err(|e| AppError::win32("QueryFullProcessImageNameW", &e))?;
-        let path = std::ffi::OsString::from_wide(&buf[..len as usize]);
-        let path = std::path::PathBuf::from(path);
-        Ok(path.file_name().map(|n| n.to_string_lossy().into_owned()))
-    }
-}
-
-/// 进程创建时间（Unix 毫秒）。进程不存在或已退出返回 `Ok(None)`。
-pub fn start_time(pid: u32) -> AppResult<Option<u64>> {
-    let Some(handle) = open_limited(pid)? else { return Ok(None) };
-    unsafe {
-        let (mut creation, mut exit, mut kernel, mut user) =
-            (FILETIME::default(), FILETIME::default(), FILETIME::default(), FILETIME::default());
-        let result = GetProcessTimes(handle, &mut creation, &mut exit, &mut kernel, &mut user);
-        let _ = CloseHandle(handle);
-        result.map_err(|e| AppError::win32("GetProcessTimes", &e))?;
-        // 进程已退出但仍有句柄未关闭时，内核对象还在、能被打开；有退出时间即视为不存在
-        if exit.dwHighDateTime != 0 || exit.dwLowDateTime != 0 {
-            return Ok(None);
-        }
-        let ticks = ((creation.dwHighDateTime as u64) << 32) | creation.dwLowDateTime as u64;
-        Ok(Some(ticks.saturating_sub(FILETIME_UNIX_EPOCH) / 10_000))
     }
 }

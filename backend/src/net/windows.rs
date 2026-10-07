@@ -1,4 +1,4 @@
-//! 读取系统 TCP / UDP 端口表（IPv4 + IPv6）。
+//! Windows：通过 IpHelper 读取端口表。
 //!
 //! 表结构按 Windows 文档逐字节解析，不依赖具体的结构体绑定，便于单测：
 //! - MIB_TCPTABLE_OWNER_PID：dwNumEntries + N × 6 个 u32

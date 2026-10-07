@@ -37,7 +37,7 @@ fn probe() {
         let mut s = System::new();
         s.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing());
     });
-    let t_services = median_ms(|| drop(services::service_map()));
+    let t_services = median_ms(|| drop(services::service_map(&[me])));
     let t_catalog = median_ms(|| drop(ProcessCatalog::load(&[me])));
     let t_start = median_ms(|| { std::hint::black_box(process::start_time(me).unwrap()); });
     let t_query = median_ms(|| {
@@ -53,7 +53,7 @@ fn probe() {
     let mut s = System::new();
     s.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing());
     let proc_count = s.processes().len();
-    let svc_count: usize = services::service_map().values().map(|v| v.len()).sum();
+    let svc_count: usize = services::service_map(&[me]).values().map(|v| v.len()).sum();
 
     println!("\n==== perf probe (median of 15) ====");
     println!("端口表总行数 {total_rows}，匹配 {matched}；进程数 {proc_count}；服务数 {svc_count}");

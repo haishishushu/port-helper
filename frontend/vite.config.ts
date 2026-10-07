@@ -6,6 +6,8 @@ import { defineConfig } from "vite";
 // Tauri 开发模式固定使用 5173 端口（见 backend/tauri.conf.json 的 devUrl）
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // 运行平台（见 src/lib/platform.ts）：各平台安装包都在对应系统上构建
+  define: { __PLATFORM__: JSON.stringify(process.platform) },
   resolve: {
     alias: { "@": path.resolve(import.meta.dirname, "./src") },
   },

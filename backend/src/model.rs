@@ -197,6 +197,8 @@ pub struct PidQueryResult {
 pub enum CloseMethod {
     WindowClose,
     ConsoleCtrlC,
+    /// macOS / Linux：发送 SIGTERM
+    Signal,
     None,
 }
 

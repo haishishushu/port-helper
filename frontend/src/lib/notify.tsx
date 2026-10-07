@@ -1,6 +1,7 @@
 import { CircleCheck, CircleX, Info, TriangleAlert, X, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import type { AppError } from "@/bindings/AppError";
+import { platform } from "@/lib/platform";
 
 type Tone = "success" | "error" | "warning" | "info";
 interface Action {
@@ -63,8 +64,8 @@ export function notifyError(err: AppError, prefix: string, handlers: ErrorHandle
   switch (err.code) {
     case "ACCESS_DENIED":
       notify.error(
-        `${prefix}：拒绝访问，需要管理员权限`,
-        handlers.onRelaunchAdmin && { label: "以管理员身份重新启动", onClick: handlers.onRelaunchAdmin },
+        `${prefix}：拒绝访问，需要${platform.admin}权限`,
+        handlers.onRelaunchAdmin && { label: `以${platform.admin}身份重新启动`, onClick: handlers.onRelaunchAdmin },
       );
       break;
     case "PROCESS_CHANGED":

@@ -1,24 +1,25 @@
-# 每次推送到 master：构建安装包 → 把新版本号提交回仓库 → 打 tag 并发布 GitHub Release
+# 推送到任意分支：在 Windows / macOS / Linux 上运行测试并构建安装包
+# 推送到 master 且全部成功后：把新版本号提交回仓库 → 打 tag 并发布 GitHub Release
 # 版本号 = 最近一次成功发布的 tag + 1：0.1.0 ~ 0.1.100 → 0.2.0 ~ 0.2.100 → …
-# 只有发布成功才会产生 tag，构建失败或被更新的提交取代时不占号，因此不会跳号
+# 只有发布成功才会产生 tag，测试/构建失败或被更新的提交取代时不占号，因此不会跳号
 name: release
 
 on:
   push:
-    branches: [master]
+    branches: ['**']
+    tags-ignore: ['**']
   workflow_dispatch:
 
-# 串行执行，避免两次运行算出同一个版本号
+# master 串行执行，避免两次运行算出同一个版本号；其他分支只保留最新一次运行
 concurrency:
-  group: release
-  cancel-in-progress: false
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_name != 'master' }}
 
 permissions:
   contents: read
 
 jobs:
   version:
-    if: github.ref_name == 'master'
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.calc.outputs.version }}
@@ -49,6 +50,44 @@ jobs:
           echo "skip=$skip" >> "$GITHUB_OUTPUT"
           echo "上一版本：${latest:-无}，本次版本：$version"
 
+  # 后端单元测试 + 集成测试（真实绑定端口、查询、结束子进程）
+  test:
+    needs: version
+    if: needs.version.outputs.skip != 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [windows-latest, macos-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.platform }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: backend -> target
+          key: test
+
+      - name: 安装 Linux 系统依赖
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: 运行测试
+        run: |
+          # 测试不打包前端，但 Tauri 编译时要求前端产物目录存在
+          mkdir -p frontend/dist
+          cargo test --locked --manifest-path backend/Cargo.toml
+
+      - name: 检查前端类型绑定是否已更新
+        if: runner.os == 'Linux'
+        run: git diff --exit-code -- frontend/src/bindings
+
   build:
     needs: version
     if: needs.version.outputs.skip != 'true'
@@ -58,14 +97,12 @@ jobs:
         include:
           - platform: windows-latest
             args: ''
-          # 后端目前只实现了 Windows（直接调用 Win32 API），移植完成后取消下面的注释，
-          # 并把 tauri.conf.json 的 bundle.targets 从 ["nsis"] 改为 "all"
-          # - platform: macos-latest # Apple 芯片
-          #   args: '--target aarch64-apple-darwin'
-          # - platform: macos-latest # Intel 芯片
-          #   args: '--target x86_64-apple-darwin'
-          # - platform: ubuntu-22.04
-          #   args: ''
+          - platform: macos-latest # Apple 芯片
+            args: '--target aarch64-apple-darwin'
+          - platform: macos-latest # Intel 芯片
+            args: '--target x86_64-apple-darwin'
+          - platform: ubuntu-22.04
+            args: ''
     runs-on: ${{ matrix.platform }}
     defaults:
       run:
@@ -76,16 +113,16 @@ jobs:
       - name: 写入版本号
         run: node scripts/set-version.mjs "${{ needs.version.outputs.version }}"
 
-      # 签名开关：在仓库 Secrets 中配置 WINDOWS_SIGN_COMMAND 即启用，未配置则不签名
+      # Windows 签名开关：在仓库 Secrets 中配置 WINDOWS_SIGN_COMMAND 即启用，未配置则不签名
       # 命令中用 %1 代表待签名文件，例如：artifact-signing-cli -e <endpoint> -a <账户> -c <证书配置> %1
       # 选定签名服务后，还需在此之前加一步安装对应签名工具，并把凭据从 Secrets 传入环境变量
-      - name: 配置代码签名
+      - name: 配置 Windows 代码签名
         if: runner.os == 'Windows'
         env:
           SIGN_COMMAND: ${{ secrets.WINDOWS_SIGN_COMMAND }}
         run: |
           if [ -z "$SIGN_COMMAND" ]; then
-            echo "::warning::未配置 WINDOWS_SIGN_COMMAND，本次安装包不签名"
+            echo "::warning::未配置 WINDOWS_SIGN_COMMAND，本次 Windows 安装包不签名"
             exit 0
           fi
           node -e '
@@ -95,7 +132,39 @@ jobs:
             conf.bundle.windows = { ...conf.bundle.windows, signCommand: process.env.SIGN_COMMAND };
             fs.writeFileSync(file, JSON.stringify(conf, null, 2));
           '
-          echo "已启用代码签名"
+          echo "已启用 Windows 代码签名"
+
+      # macOS 签名开关：配置 APPLE_CERTIFICATE（.p12 的 base64）与 APPLE_CERTIFICATE_PASSWORD 即用开发者证书签名，
+      # 再配置 APPLE_ID / APPLE_PASSWORD（App 专用密码）/ APPLE_TEAM_ID 即同时公证；未配置时使用 ad-hoc 签名
+      - name: 配置 macOS 代码签名
+        if: runner.os == 'macOS'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE" ]; then
+            echo "::warning::未配置 APPLE_CERTIFICATE，本次 macOS 安装包使用 ad-hoc 签名（未公证）"
+            exit 0
+          fi
+          # 只把已配置的变量传给后续步骤：空值会被 Tauri 当作已配置而报错
+          for key in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [ -n "${!key}" ]; then
+              { echo "$key<<__EOF__"; echo "${!key}"; echo "__EOF__"; } >> "$GITHUB_ENV"
+            fi
+          done
+          # 去掉 ad-hoc 配置，由 Tauri 从证书推断签名身份
+          node -e '
+            const fs = require("fs");
+            const file = "backend/tauri.macos.conf.json";
+            const conf = JSON.parse(fs.readFileSync(file, "utf8"));
+            delete conf.bundle.macOS.signingIdentity;
+            fs.writeFileSync(file, JSON.stringify(conf, null, 2));
+          '
+          echo "已启用 macOS 代码签名"
 
       - uses: pnpm/action-setup@v4
         with:
@@ -111,17 +180,18 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: backend -> target
+          key: build-${{ strategy.job-index }}
 
       - name: 安装 Linux 系统依赖
-        if: matrix.platform == 'ubuntu-22.04'
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
 
       - name: 安装前端依赖
         run: |
@@ -129,6 +199,9 @@ jobs:
           pnpm --dir frontend install --frozen-lockfile
 
       - name: 构建安装包
+        env:
+          # 打包 AppImage 的工具本身也是 AppImage，CI 中没有 FUSE，改为解压后运行
+          APPIMAGE_EXTRACT_AND_RUN: 1
         run: pnpm tauri build ${{ matrix.args }}
 
       - uses: actions/upload-artifact@v7
@@ -137,14 +210,14 @@ jobs:
           if-no-files-found: error
           path: |
             backend/target/**/release/bundle/nsis/*.exe
-            backend/target/**/release/bundle/msi/*.msi
             backend/target/**/release/bundle/dmg/*.dmg
             backend/target/**/release/bundle/deb/*.deb
             backend/target/**/release/bundle/rpm/*.rpm
             backend/target/**/release/bundle/appimage/*.AppImage
 
   release:
-    needs: [version, build]
+    needs: [version, test, build]
+    if: github.ref_name == 'master'
     runs-on: ubuntu-latest
     permissions:
       contents: write

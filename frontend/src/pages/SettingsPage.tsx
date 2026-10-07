@@ -11,6 +11,7 @@ import { useSettings } from "@/hooks/use-settings";
 import { notify } from "@/lib/notify";
 import { CLOSE_TIMEOUT_RANGE, type ThemeMode } from "@/lib/settings";
 import { cn } from "@/lib/utils";
+import { platform } from "@/lib/platform";
 
 const ClearRecentDialog = lazy(() =>
   import("@/components/dialogs/ClearRecentDialog").then((m) => ({ default: m.ClearRecentDialog })),
@@ -73,7 +74,7 @@ function ThemePreview({ mode }: { mode: ThemeMode }) {
 const THEMES: { mode: ThemeMode; label: string; desc: string }[] = [
   { mode: "light", label: "浅色", desc: "明亮背景" },
   { mode: "dark", label: "深色", desc: "护眼暗色" },
-  { mode: "system", label: "跟随系统", desc: "随 Windows 切换" },
+  { mode: "system", label: "跟随系统", desc: platform.themeFollow },
 ];
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -157,7 +158,7 @@ export function SettingsPage() {
                 );
               })}
             </div>
-            <p className="text-xs text-fg-3">选择“跟随系统”时，会随 Windows 的浅色/深色设置自动切换。</p>
+            <p className="text-xs text-fg-3">{platform.themeFollowHint}</p>
           </Section>
 
           <Section title="查询">
@@ -201,17 +202,17 @@ export function SettingsPage() {
               <Row
                 first
                 label="运行权限"
-                desc={elevated ? "当前以管理员权限运行" : "当前为普通权限。结束服务或 SYSTEM 进程需要管理员权限"}
+                desc={elevated ? `当前以${platform.admin}权限运行` : platform.elevateReason}
               >
                 {!elevated && (
                   <Button variant="outline" onClick={requestRelaunch}>
                     <Shield />
-                    以管理员身份重新启动
+                    以{platform.admin}身份重新启动
                   </Button>
                 )}
               </Row>
               <Row label="版本" desc={`port-helper ${version || "—"}`}>
-                <span className="font-mono text-xs text-fg-3">Windows x64</span>
+                <span className="font-mono text-xs text-fg-3">{platform.label}</span>
               </Row>
             </div>
           </Section>

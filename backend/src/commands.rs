@@ -59,9 +59,19 @@ pub fn get_privilege() -> PrivilegeInfo {
     PrivilegeInfo { elevated: privilege::is_elevated() }
 }
 
+#[cfg(windows)]
 #[tauri::command]
 pub fn relaunch_as_admin(app: AppHandle) -> AppResult<()> {
     privilege::relaunch_as_admin()?;
+    app.exit(0);
+    Ok(())
+}
+
+/// macOS / Linux 会等待用户在系统密码框中确认，放到阻塞线程池，避免界面卡住。
+#[cfg(unix)]
+#[tauri::command]
+pub async fn relaunch_as_admin(app: AppHandle) -> AppResult<()> {
+    blocking(privilege::relaunch_as_admin).await?;
     app.exit(0);
     Ok(())
 }
