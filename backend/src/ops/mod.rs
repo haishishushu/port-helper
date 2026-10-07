@@ -22,13 +22,14 @@ const MAX_CLOSE_TIMEOUT_MS: u32 = 60_000;
 /// 操作前的最终安全校验：保护进程、关键进程确认、PID 复用校验。
 /// 只读取目标进程的名称与启动时间，不加载全量进程快照和服务表（prd/todo/perf-todo.md P1-5）。
 pub fn guard(pid: u32, expected_start: u64, confirm_critical: bool) -> AppResult<()> {
-    let name = match process::pseudo_name(pid) {
-        Some(name) => name.to_string(),
+    // 先判断是否受保护，再判断是否存在：普通权限下可能读不到系统进程（如 launchd）的名称
+    let (name, missing) = match process::pseudo_name(pid) {
+        Some(name) => (name.to_string(), false),
         None => match process::image_name(pid) {
-            Ok(Some(name)) => name,
-            Ok(None) => return Err(AppError::not_found(pid)),
+            Ok(Some(name)) => (name, false),
+            Ok(None) => (String::new(), true),
             // 受保护进程可能读不到映像路径，交给后面的启动时间校验兜底
-            Err(_) => String::new(),
+            Err(_) => (String::new(), false),
         },
     };
     let c = classify(&ClassifyInput {
@@ -52,6 +53,7 @@ pub fn guard(pid: u32, expected_start: u64, confirm_critical: bool) -> AppResult
                 format!("{name} 是{label}关键进程，需要二次确认"),
             ));
         }
+        _ if missing => return Err(AppError::not_found(pid)),
         _ => {}
     }
     match process::start_time(pid)? {

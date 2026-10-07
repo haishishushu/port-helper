@@ -278,15 +278,15 @@ mod tests {
 
     #[test]
     fn recognizes_dev_servers_by_command_line() {
-        let vite = run(1, "node.exe", r"node D:\app\node_modules\vite\bin\vite.js --port 5173", &[], None);
+        let vite = run(101, "node.exe", r"node D:\app\node_modules\vite\bin\vite.js --port 5173", &[], None);
         assert_eq!(vite.app_name, "Vite 开发服务器");
-        let spring = run(2, "java.exe", "java -cp x org.springframework.boot.loader.JarLauncher", &[], None);
+        let spring = run(102, "java.exe", "java -cp x org.springframework.boot.loader.JarLauncher", &[], None);
         assert_eq!(spring.app_name, "Spring Boot");
-        let jar = run(3, "java.exe", r#"java -jar "D:\code\shop-api.jar""#, &[], None);
+        let jar = run(103, "java.exe", r#"java -jar "D:\code\shop-api.jar""#, &[], None);
         assert_eq!(jar.app_name, "Java · shop-api.jar");
-        let api = run(40, "python.exe", "python -m uvicorn main:app", &[], None);
+        let api = run(104, "python.exe", "python -m uvicorn main:app", &[], None);
         assert_eq!(api.app_name, "FastAPI (Uvicorn)");
-        assert_eq!(run(5, "mysqld.exe", "", &[], None).app_name, "MySQL");
+        assert_eq!(run(105, "mysqld.exe", "", &[], None).app_name, "MySQL");
     }
 
     #[test]

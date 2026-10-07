@@ -82,7 +82,15 @@ jobs:
         run: |
           # 测试不打包前端，但 Tauri 编译时要求前端产物目录存在
           mkdir -p frontend/dist
-          cargo test --locked --manifest-path backend/Cargo.toml
+          set +e
+          cargo test --locked --manifest-path backend/Cargo.toml 2>&1 | tee test.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            # 未登录时无法下载日志，把失败详情写成注解，在运行页面上直接可见
+            grep -E -A15 '^---- |panicked at|^error(\[|:)' test.log | head -200 \
+              | perl -0pe 's/%/%25/g; s/\r//g; s/\n/%0A/g; $_ = "::error title=测试失败::$_\n"'
+          fi
+          exit "$status"
 
       - name: 检查前端类型绑定是否已更新
         if: runner.os == 'Linux'
