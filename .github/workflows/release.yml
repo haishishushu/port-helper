@@ -1,25 +1,25 @@
-# 推送到任意分支：在 Windows / macOS / Linux 上运行测试并构建安装包
-# 推送到 master 且全部成功后：把新版本号提交回仓库 → 打 tag 并发布 GitHub Release
+# 推送到 master：在 Windows / macOS / Linux 上运行测试并构建安装包，
+# 全部成功后把新版本号提交回仓库 → 打 tag 并发布 GitHub Release
 # 版本号 = 最近一次成功发布的 tag + 1：0.1.0 ~ 0.1.100 → 0.2.0 ~ 0.2.100 → …
 # 只有发布成功才会产生 tag，测试/构建失败或被更新的提交取代时不占号，因此不会跳号
 name: release
 
 on:
   push:
-    branches: ['**']
-    tags-ignore: ['**']
+    branches: [master]
   workflow_dispatch:
 
-# master 串行执行，避免两次运行算出同一个版本号；其他分支只保留最新一次运行
+# 串行执行，避免两次运行算出同一个版本号
 concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref_name != 'master' }}
+  group: release
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
   version:
+    if: github.ref_name == 'master'
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.calc.outputs.version }}
@@ -225,7 +225,6 @@ jobs:
 
   release:
     needs: [version, test, build]
-    if: github.ref_name == 'master'
     runs-on: ubuntu-latest
     permissions:
       contents: write
