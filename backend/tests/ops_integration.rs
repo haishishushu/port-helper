@@ -29,7 +29,9 @@ fn kill_terminates_child_after_identity_check() {
 
     let result = ops::kill(pid, start, false).unwrap();
     assert!(result.exited);
-    assert!(child.try_wait().unwrap().is_some(), "子进程应已退出");
+    // macOS 上进程在退出过程中就已读不到信息，可能比内核完成回收早几毫秒，所以这里阻塞等待回收
+    let status = child.wait().unwrap();
+    assert!(!status.success(), "子进程应被强制结束，而不是正常退出");
 }
 
 #[test]
