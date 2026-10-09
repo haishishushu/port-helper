@@ -7,7 +7,7 @@ use tauri::AppHandle;
 use crate::error::{AppError, AppResult};
 use crate::model::{CloseResult, KillResult, PidQueryResult, PortQueryResult, PrivilegeInfo};
 use crate::process::ProcessCatalog;
-use crate::{net, ops, privilege, query};
+use crate::{net, ops, privilege, query, tray};
 
 /// 系统调用都可能阻塞，统一放到阻塞线程池执行。
 async fn blocking<T: Send + 'static>(f: impl FnOnce() -> AppResult<T> + Send + 'static) -> AppResult<T> {
@@ -74,4 +74,28 @@ pub async fn relaunch_as_admin(app: AppHandle) -> AppResult<()> {
     blocking(privilege::relaunch_as_admin).await?;
     app.exit(0);
     Ok(())
+}
+
+/// 托盘菜单页加载完成，可以弹出了。
+#[tauri::command]
+pub fn tray_menu_ready(app: AppHandle) {
+    tray::menu_ready(&app);
+}
+
+/// 托盘菜单“打开主界面”。
+#[tauri::command]
+pub fn tray_open_main(app: AppHandle) {
+    tray::show_main(&app);
+}
+
+/// 托盘菜单按 Esc 收起。
+#[tauri::command]
+pub fn tray_hide_menu(app: AppHandle) {
+    tray::hide_menu(&app);
+}
+
+/// 托盘菜单“退出”：主窗口的关闭按钮只隐藏到托盘，这里才真正退出进程。
+#[tauri::command]
+pub fn quit_app(app: AppHandle) {
+    app.exit(0);
 }

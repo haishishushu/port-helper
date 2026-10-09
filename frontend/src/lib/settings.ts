@@ -21,6 +21,13 @@ export const DEFAULT_SETTINGS: Settings = {
 
 export const CLOSE_TIMEOUT_RANGE = { min: 1, max: 60 } as const;
 
+export const darkQuery = () => window.matchMedia("(prefers-color-scheme: dark)");
+
+/** 把主题设置解析为实际生效的明暗（system 跟随系统） */
+export function resolveTheme(mode: ThemeMode, systemDark: boolean): "light" | "dark" {
+  return mode === "system" ? (systemDark ? "dark" : "light") : mode;
+}
+
 const STORE_FILE = "settings.json";
 let storePromise: Promise<Store | null> | null = null;
 
@@ -41,6 +48,13 @@ export async function loadSettings(): Promise<Settings> {
     if (v !== undefined && v !== null) (loaded as Record<string, unknown>)[k] = v;
   }
   return sanitize(loaded);
+}
+
+/** 订阅主题设置的变更（任何窗口改动都会通知，托盘菜单靠它跟随主窗口切换主题）。 */
+export async function onThemeChange(cb: (mode: ThemeMode) => void): Promise<() => void> {
+  const store = await getStore();
+  if (!store) return () => {};
+  return store.onKeyChange<ThemeMode>("theme", (v) => cb(sanitize({ ...DEFAULT_SETTINGS, theme: v ?? "system" }).theme));
 }
 
 export async function saveSettings(patch: Partial<Settings>) {

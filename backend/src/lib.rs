@@ -10,8 +10,8 @@ pub mod ops;
 pub mod privilege;
 pub mod process;
 pub mod query;
+pub mod tray;
 
-#[cfg(windows)]
 use tauri::WindowEvent;
 use tauri_plugin_log::{Target, TargetKind};
 
@@ -37,11 +37,23 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_store::Builder::default().build())
-        .on_window_event(|_window, _event| {
-            #[cfg(windows)]
-            if let WindowEvent::Resized(_) = _event {
-                memory::sync_with_window(_window);
+        .setup(|app| {
+            tray::setup(app.handle())?;
+            Ok(())
+        })
+        .on_window_event(|window, event| match (window.label(), event) {
+            // 右上角关闭（含 Alt+F4）只隐藏到托盘；真正退出走托盘菜单的“退出”
+            (tray::MAIN_WINDOW, WindowEvent::CloseRequested { api, .. }) => {
+                api.prevent_close();
+                tray::hide_main(window);
             }
+            // 托盘菜单点到别处即收起，与系统菜单行为一致
+            (tray::MENU_WINDOW, WindowEvent::Focused(false)) => {
+                let _ = window.hide();
+            }
+            #[cfg(windows)]
+            (tray::MAIN_WINDOW, WindowEvent::Resized(_)) => memory::sync_with_window(window),
+            _ => {}
         })
         .invoke_handler(tauri::generate_handler![
             commands::query_port,
@@ -50,7 +62,18 @@ pub fn run() {
             commands::kill_process,
             commands::get_privilege,
             commands::relaunch_as_admin,
+            commands::tray_menu_ready,
+            commands::tray_open_main,
+            commands::tray_hide_menu,
+            commands::quit_app,
         ])
-        .run(tauri::generate_context!())
-        .expect("启动 port-helper 失败");
+        .build(tauri::generate_context!())
+        .expect("启动 port-helper 失败")
+        .run(|_app, _event| {
+            // macOS：主窗口隐藏到托盘后，点击程序坞图标也能恢复
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = _event {
+                tray::show_main(_app);
+            }
+        });
 }

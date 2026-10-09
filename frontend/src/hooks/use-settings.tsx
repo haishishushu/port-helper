@@ -1,5 +1,5 @@
 import { createContext, use, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { DEFAULT_SETTINGS, loadSettings, saveSettings, type Settings } from "@/lib/settings";
+import { darkQuery, DEFAULT_SETTINGS, loadSettings, resolveTheme, saveSettings, type Settings } from "@/lib/settings";
 
 interface SettingsContextValue {
   settings: Settings;
@@ -10,8 +10,6 @@ interface SettingsContextValue {
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
-
-const darkQuery = () => window.matchMedia("(prefers-color-scheme: dark)");
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
@@ -32,7 +30,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     return () => mq.removeEventListener("change", onChange);
   }, []);
 
-  const resolvedTheme = settings.theme === "system" ? (systemDark ? "dark" : "light") : settings.theme;
+  const resolvedTheme = resolveTheme(settings.theme, systemDark);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", resolvedTheme === "dark");

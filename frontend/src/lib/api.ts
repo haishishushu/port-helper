@@ -33,4 +33,8 @@ export const api = {
     call<KillResult>("kill_process", { pid, startTime, confirmCritical }),
   getPrivilege: () => call<PrivilegeInfo>("get_privilege"),
   relaunchAsAdmin: () => call<void>("relaunch_as_admin"),
+  trayMenuReady: () => call<void>("tray_menu_ready"),
+  trayOpenMain: () => call<void>("tray_open_main"),
+  trayHideMenu: () => call<void>("tray_hide_menu"),
+  quitApp: () => call<void>("quit_app"),
 };

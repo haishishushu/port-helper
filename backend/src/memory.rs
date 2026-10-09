@@ -1,6 +1,6 @@
 //! WebView2 内存目标级别（prd/todo/perf-todo.md P1-1）。
 //!
-//! 窗口最小化时把 WebView2 的 MemoryUsageTargetLevel 设为 Low，让渲染进程与 GPU 进程
+//! 主窗口最小化或隐藏到托盘时把 WebView2 的 MemoryUsageTargetLevel 设为 Low，让渲染进程与 GPU 进程
 //! 释放可回收的内存；恢复显示时设回 Normal。需要 WebView2 Runtime 114+，更低版本调用无效果。
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -14,9 +14,9 @@ use windows::core::Interface;
 /// 当前是否处于低内存级别，避免每次窗口尺寸变化都重复调用
 static LOW: AtomicBool = AtomicBool::new(false);
 
-/// 在窗口尺寸变化（含最小化 / 还原）时调用。
+/// 在主窗口尺寸变化（含最小化 / 还原）、隐藏到托盘与从托盘恢复时调用。
 pub fn sync_with_window(window: &Window) {
-    let low = window.is_minimized().unwrap_or(false);
+    let low = window.is_minimized().unwrap_or(false) || !window.is_visible().unwrap_or(true);
     if LOW.swap(low, Ordering::Relaxed) == low {
         return;
     }

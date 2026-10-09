@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 const controls = [
   { key: "min", icon: Minus, label: "最小化", run: () => getCurrentWindow().minimize() },
   { key: "max", icon: Square, label: "最大化", run: () => getCurrentWindow().toggleMaximize() },
-  { key: "close", icon: X, label: "关闭", run: () => getCurrentWindow().close() },
+  { key: "close", icon: X, label: "关闭到托盘", run: () => getCurrentWindow().close() },
 ] as const;
 
 interface TitleBarProps {
