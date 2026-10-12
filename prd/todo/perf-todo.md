@@ -59,7 +59,7 @@
 
 ### P1：内存，收益最大
 
-- [x] **P1-1 窗口最小化或隐藏时，把 WebView2 的内存目标调为“低”**（`backend/src/memory.rs`；效果待实测）
+- [x] ~~**P1-1 窗口最小化或隐藏时，把 WebView2 的内存目标调为“低”**~~（已撤销：`Low` 会让部分内存被换出到磁盘，从托盘或任务栏恢复后界面明显卡顿，体验得不偿失，`memory.rs` 已删除）
   - 依据：wry 0.57 提供 `set_memory_usage_level`（对应 WebView2 的 `MemoryUsageTargetLevel`，要求 Runtime 114 及以上，更低版本调用后不生效）。Tauri 可以通过 `webview.with_webview` 拿到底层 WebView 调用。
   - 方案：
     - 监听窗口事件，最小化或隐藏时设为 `Low`，恢复显示时设回 `Normal`；
@@ -142,7 +142,7 @@
 
 ### 3.3 待完成
 
-- P0-1 前后对比、P1-1 最小化效果、P2-1 线程数：需要关闭开发版后运行
+- P0-1 前后对比、P2-1 线程数：需要关闭开发版后运行
   `scripts/measure-memory.ps1`，分别测 `port-helper-before.exe` 与 `port-helper-after.exe`。
 - P1-2：用 `-BrowserArgs "--disable-gpu"` 等参数做 A/B，同时比较内存和 CPU 时间，再决定是否写入 `tauri.conf.json`。
 
@@ -158,7 +158,7 @@
 ## 五、建议执行顺序
 
 1. **P0-1**：建立基准。
-2. **P1-1**、**P1-3**、**P1-5**：风险低，收益明确。
+2. **P1-3**、**P1-5**：风险低，收益明确。
 3. **P1-2**：A/B 试验，根据数据决定是否采用。
 4. **P1-4** 方案 A，以及 **P2-1**、**P2-2**。
 5. 前端 P2 项按需进行。

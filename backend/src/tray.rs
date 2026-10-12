@@ -1,4 +1,4 @@
-//! 系统托盘：主窗口点右上角关闭时隐藏到托盘，托盘右键弹出与应用同风格的菜单（打开主界面 / 退出）。
+//! 系统托盘：主窗口点右上角最小化或关闭时隐藏到托盘，托盘右键弹出与应用同风格的菜单（打开主界面 / 退出）。
 //!
 //! Windows / macOS 的托盘菜单是一个无边框的小 WebView 窗口（前端 `tray.html`），首次右键时才创建，
 //! 之后隐藏复用；菜单页加载完成后通过 `tray_menu_ready` 报到，再显示，避免首次弹出白屏。
@@ -65,8 +65,6 @@ pub fn hide_main(window: &Window) {
     if let Err(e) = window.hide() {
         log::warn!("隐藏主窗口失败：{e}");
     }
-    #[cfg(windows)]
-    crate::memory::sync_with_window(window);
 }
 
 /// 从托盘恢复并聚焦主窗口（最小化、隐藏两种状态都能恢复）。
@@ -76,8 +74,6 @@ pub fn show_main(app: &AppHandle) {
     let _ = main.unminimize();
     let _ = main.show();
     let _ = main.set_focus();
-    #[cfg(windows)]
-    crate::memory::sync_with_window(&main.as_ref().window());
 }
 
 pub fn hide_menu(app: &AppHandle) {

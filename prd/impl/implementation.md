@@ -240,7 +240,7 @@ interface AppError { code: ErrorCode; message: string }
 
 ### 6.6 内存与运行时
 
-- 窗口最小化时把 WebView2 的内存目标级别设为 Low，还原时设回 Normal（`memory.rs`，需 WebView2 Runtime 114+）。
+- 不调整 WebView2 的内存目标级别：设为 Low 会让内存被换出到磁盘，窗口恢复后明显卡顿。
 - 自定义 Tokio 运行时：2 个工作线程、阻塞线程池上限 4 个。
 
 ### 6.7 日志
@@ -294,7 +294,7 @@ idle
 
 ### 7.5 标题栏
 
-`decorations: false`；`TitleBar` 用 `data-tauri-drag-region` 拖动，按钮调用 `getCurrentWindow().minimize() / toggleMaximize() / close()`；capabilities 只开放这几项窗口权限和 `store:default`。
+`decorations: false`；`TitleBar` 用 `data-tauri-drag-region` 拖动，按钮调用 `getCurrentWindow().hide() / toggleMaximize() / close()`（最小化与关闭都隐藏到托盘，关闭由后端拦截 `CloseRequested`）；capabilities 只开放这几项窗口权限和 `store:default`。
 
 ## 8. 测试与验证
 

@@ -2,8 +2,6 @@ pub mod commands;
 #[cfg(windows)]
 pub mod console;
 pub mod error;
-#[cfg(windows)]
-pub mod memory;
 pub mod model;
 pub mod net;
 pub mod ops;
@@ -51,8 +49,6 @@ pub fn run() {
             (tray::MENU_WINDOW, WindowEvent::Focused(false)) => {
                 let _ = window.hide();
             }
-            #[cfg(windows)]
-            (tray::MAIN_WINDOW, WindowEvent::Resized(_)) => memory::sync_with_window(window),
             _ => {}
         })
         .invoke_handler(tauri::generate_handler![
