@@ -45,6 +45,10 @@ pub fn run() {
                 api.prevent_close();
                 tray::hide_main(window);
             }
+            // 系统层面的最小化（Win+↓、点任务栏图标等）同样隐藏到托盘，与标题栏的最小化按钮一致
+            (tray::MAIN_WINDOW, WindowEvent::Resized(_)) if window.is_minimized().unwrap_or(false) => {
+                tray::hide_main(window);
+            }
             // 托盘菜单点到别处即收起，与系统菜单行为一致
             (tray::MENU_WINDOW, WindowEvent::Focused(false)) => {
                 let _ = window.hide();
