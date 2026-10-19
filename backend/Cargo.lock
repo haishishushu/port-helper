@@ -2893,7 +2893,7 @@ dependencies = [
 
 [[package]]
 name = "port-helper"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "libc",
  "log",
