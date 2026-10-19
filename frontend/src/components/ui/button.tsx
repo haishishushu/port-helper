@@ -12,6 +12,7 @@ const buttonVariants = cva(
         outline: "border border-line-strong bg-surface text-fg hover:bg-surface-hover",
         danger: "border border-danger-border bg-danger-bg text-danger hover:brightness-95 dark:hover:brightness-125",
         destructive: "bg-danger-solid text-white hover:bg-danger-solid/90",
+        success: "bg-success-bg text-success hover:bg-success hover:text-on-ink",
         ghost: "text-fg-2 hover:bg-surface-hover hover:text-fg",
         link: "text-fg underline-offset-4 hover:underline",
       },

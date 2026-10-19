@@ -5,6 +5,7 @@ import type { KillResult } from "@/bindings/KillResult";
 import type { PidQueryResult } from "@/bindings/PidQueryResult";
 import type { PortQueryResult } from "@/bindings/PortQueryResult";
 import type { PrivilegeInfo } from "@/bindings/PrivilegeInfo";
+import type { UpdateCheck } from "@/bindings/UpdateCheck";
 
 /** 把 invoke 抛出的任意错误统一为 AppError。 */
 export function toAppError(err: unknown): AppError {
@@ -37,4 +38,7 @@ export const api = {
   trayOpenMain: () => call<void>("tray_open_main"),
   trayHideMenu: () => call<void>("tray_hide_menu"),
   quitApp: () => call<void>("quit_app"),
+  checkUpdate: () => call<UpdateCheck>("check_app_update"),
+  downloadUpdate: () => call<UpdateCheck>("download_app_update"),
+  installUpdate: () => call<void>("install_app_update"),
 };

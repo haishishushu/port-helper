@@ -9,6 +9,7 @@ pub mod privilege;
 pub mod process;
 pub mod query;
 pub mod tray;
+pub mod updater;
 
 use tauri::WindowEvent;
 use tauri_plugin_log::{Target, TargetKind};
@@ -35,6 +36,8 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(updater::UpdateState::default())
         .setup(|app| {
             tray::setup(app.handle())?;
             Ok(())
@@ -70,6 +73,9 @@ pub fn run() {
             commands::tray_open_main,
             commands::tray_hide_menu,
             commands::quit_app,
+            updater::check_app_update,
+            updater::download_app_update,
+            updater::install_app_update,
         ])
         .build(tauri::generate_context!())
         .expect("启动 port-helper 失败")

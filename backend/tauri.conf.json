@@ -28,10 +28,18 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
     "windows": {
       "webviewInstallMode": { "type": "downloadBootstrapper" }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDBFRTM2QzQyRUZFNjkyM0MKUldROGt1YnZRbXpqRGlua0d6TCtNVFV5MGo3anVpVFZFMWx0dkZHeVltV3NwYjN1T0xabFFsWFAK",
+      "endpoints": ["https://github.com/haishishushu/port-helper/releases/latest/download/latest.json"],
+      "windows": { "installMode": "passive" }
     }
   }
 }

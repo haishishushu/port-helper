@@ -1,6 +1,7 @@
-import { ArrowUpRight, PlugZap, ScanSearch, Search, Settings, Shield, ShieldCheck, type LucideIcon } from "lucide-react";
+import { ArrowUpRight, CircleArrowUp, LoaderCircle, PlugZap, ScanSearch, Search, Settings, Shield, ShieldCheck, type LucideIcon } from "lucide-react";
 import { usePrivilege } from "@/hooks/use-privilege";
 import { useRelaunchAdmin } from "@/hooks/use-relaunch";
+import { phaseLabel, useUpdate } from "@/hooks/use-update";
 import { cn } from "@/lib/utils";
 import { platform } from "@/lib/platform";
 
@@ -43,6 +44,28 @@ function PermissionRow() {
   );
 }
 
+/**
+ * 左上角的更新入口：启动检查发现新版本后出现，点击下载并打开进度框；更新进行中显示当前进度。
+ * 所在的品牌行是窗口拖拽区，app-region 会继承，按钮必须单独设为 no-drag，否则点击会变成拖动窗口。
+ */
+function UpdateBadge() {
+  const { phase, info, progress, badgeVisible, openUpdate } = useUpdate();
+  if (!badgeVisible || !info) return null;
+  const busy = phase === "downloading" || phase === "installing";
+  const label = phaseLabel(phase, progress) || `v${info.availableVersion}`;
+  const Icon = busy ? LoaderCircle : CircleArrowUp;
+  return (
+    <button
+      onClick={openUpdate}
+      title={phase === "idle" ? `发现新版本 v${info.availableVersion}，点击更新` : label}
+      className="ml-auto flex h-[22px] shrink-0 [app-region:no-drag] items-center gap-1 rounded-full bg-success-bg px-2 text-[11.5px] font-semibold text-success transition-colors hover:bg-success hover:text-on-ink"
+    >
+      <Icon className={busy ? "size-3 animate-spin" : "size-3"} />
+      {label}
+    </button>
+  );
+}
+
 export function Sidebar({ view, onNavigate }: { view: View; onNavigate: (v: View) => void }) {
   return (
     <aside className="flex w-[232px] shrink-0 flex-col gap-0.5 border-r border-line bg-sidebar px-2.5 pt-3.5 pb-3">
@@ -51,6 +74,7 @@ export function Sidebar({ view, onNavigate }: { view: View; onNavigate: (v: View
           <PlugZap className="size-3.5 text-on-ink" />
         </span>
         <span className="pointer-events-none text-sm font-semibold">port-helper</span>
+        <UpdateBadge />
       </div>
       <NavItem icon={Search} label="端口查询" active={view === "port"} onClick={() => onNavigate("port")} />
       <NavItem icon={ScanSearch} label="进程反查" active={view === "pid"} onClick={() => onNavigate("pid")} />

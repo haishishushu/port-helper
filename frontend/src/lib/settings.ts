@@ -10,6 +10,8 @@ export interface Settings {
   closeTimeoutSec: number;
   /** 最近查询的端口，最近的在前 */
   recentPorts: number[];
+  /** 用户选择跳过的版本号，空串表示没有；同版本不再在左上角提示，更新的版本照常提示 */
+  skippedVersion: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -17,6 +19,7 @@ export const DEFAULT_SETTINGS: Settings = {
   listenOnly: true,
   closeTimeoutSec: 5,
   recentPorts: [],
+  skippedVersion: "",
 };
 
 export const CLOSE_TIMEOUT_RANGE = { min: 1, max: 60 } as const;
@@ -75,5 +78,6 @@ function sanitize(s: Settings): Settings {
     recentPorts: Array.isArray(s.recentPorts)
       ? s.recentPorts.filter((p) => Number.isInteger(p) && p >= 1 && p <= 65535)
       : [],
+    skippedVersion: typeof s.skippedVersion === "string" ? s.skippedVersion : "",
   };
 }

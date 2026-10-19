@@ -100,6 +100,9 @@ React 页面 ──► lib/api.ts ──invoke──► commands.rs ──spawn_
 | `kill_process` | `{ pid, startTime, confirmCritical }` | `KillResult` | 强制结束 |
 | `get_privilege` | — | `PrivilegeInfo` | 是否管理员 |
 | `relaunch_as_admin` | — | — | 成功后当前进程退出 |
+| `check_app_update` | — | `UpdateCheck` | 只查询是否有新版本，不下载 |
+| `download_app_update` | — | `UpdateCheck` | 下载并校验签名，安装包留在内存；进度通过 `update-download-progress` 事件（`UpdateProgress`）推送 |
+| `install_app_update` | — | — | 安装已下载的更新包；成功后当前进程退出，由安装器重新打开新版本 |
 
 ### 5.2 主要类型
 
@@ -243,7 +246,14 @@ interface AppError { code: ErrorCode; message: string }
 - 不调整 WebView2 的内存目标级别：设为 Low 会让内存被换出到磁盘，窗口恢复后明显卡顿。
 - 自定义 Tokio 运行时：2 个工作线程、阻塞线程池上限 4 个。
 
-### 6.7 日志
+### 6.7 应用内更新（updater.rs）
+
+- 使用 `tauri-plugin-updater`，端点为 GitHub Release 的 `releases/latest/download/latest.json`，签名公钥写在 `tauri.conf.json`；私钥在本机 `~/.tauri/port-helper.key`，不入库，配置为仓库 Secret `TAURI_SIGNING_PRIVATE_KEY`。私钥丢失后已安装的版本将无法再收到更新。
+- 插件的 HTTP 客户端不读取 Windows 系统代理，这里先读环境变量 `HTTPS_PROXY` 等，再读注册表“Internet 选项”里的代理，显式注入。
+- Windows 安装时插件拉起 NSIS 安装器（被动模式，装完自动启动新版本）后直接结束进程，结束前会调用 `cleanup_before_exit` 清掉托盘图标。
+- CI：构建时有签名私钥才生成更新包与 `.sig`；两个 macOS 架构的 `.app.tar.gz` 同名，上传前按架构改名；发布时由 `scripts/make-update-manifest.mjs` 生成 `latest.json`，更新说明取上一版本以来的提交标题。
+
+### 6.8 日志
 
 使用 `log` + `tauri-plugin-log`：开发环境输出到控制台；Release 只记录 Info 及以上，且不记录命令行全文（可能含密码、Token）。
 
@@ -289,10 +299,20 @@ idle
 | `listenOnly` | `boolean` | `true` |
 | `closeTimeoutSec` | `number`（1–60） | `5` |
 | `recentPorts` | `number[]` | `[]` |
+| `skippedVersion` | `string`（空串表示没有） | `""` |
 
 常用端口算法（纯函数 `pushRecentPort`）：查询成功发起后，把端口移到数组首位、去重、截断为 10 个。主题为 `system` 时监听 `prefers-color-scheme` 实时切换。
 
-### 7.5 标题栏
+### 7.5 应用内更新（`useUpdate`）
+
+启动 1 秒后静默检查一次（失败不提示）。侧边栏左上角“port-helper”右侧的绿色按钮与设置页“关于 › 版本”的绿色按钮共用同一份状态：
+
+- 没有新版本：只有设置页显示“检查更新”，手动检查失败时提示错误。
+- 发现新版本：左上角出现 `vX.Y.Z`，设置页变为“更新到 vX.Y.Z”和“跳过此版本”；跳过的版本不再出现在左上角，更新的版本照常提示。
+- 点击任一入口即开始下载并打开进度框；关闭进度框不会中断下载，两个按钮同步显示“下载中 n%”，点击可重新打开。
+- 下载完成并通过签名校验后，进度框里点一次“安装并重启”；下载失败可在进度框重试。
+
+### 7.6 标题栏
 
 `decorations: false`；`TitleBar` 用 `data-tauri-drag-region` 拖动，按钮调用 `getCurrentWindow().hide() / toggleMaximize() / close()`（最小化与关闭都隐藏到托盘，关闭由后端拦截 `CloseRequested`；`Win+↓`、点任务栏图标等系统最小化由后端在 `Resized` 中检测到最小化后先 `minimize()` 同步 tao 的最小化标志再隐藏，避免 Win+D 这类不经 `SC_MINIMIZE` 的最小化把还原位置写成屏幕外坐标）；capabilities 只开放这几项窗口权限和 `store:default`。
 

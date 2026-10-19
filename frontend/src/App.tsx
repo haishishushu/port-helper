@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { PrivilegeProvider } from "@/hooks/use-privilege";
 import { RelaunchProvider } from "@/hooks/use-relaunch";
 import { SettingsProvider, useSettings } from "@/hooks/use-settings";
+import { UpdateProvider } from "@/hooks/use-update";
 import { cn } from "@/lib/utils";
 import type { PidRequest } from "@/pages/PidQueryPage";
 import { PortQueryPage, type PortRequest } from "@/pages/PortQueryPage";
@@ -71,7 +72,9 @@ export default function App() {
     <SettingsProvider>
       <PrivilegeProvider>
         <RelaunchProvider>
-          <Shell />
+          <UpdateProvider>
+            <Shell />
+          </UpdateProvider>
         </RelaunchProvider>
       </PrivilegeProvider>
     </SettingsProvider>

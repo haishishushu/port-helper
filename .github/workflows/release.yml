@@ -206,11 +206,48 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm --dir frontend install --frozen-lockfile
 
+      # 应用内更新签名开关：在仓库 Secrets 中配置 TAURI_SIGNING_PRIVATE_KEY（本机 ~/.tauri/port-helper.key 的内容）即生成
+      # 更新包与 .sig 签名；未配置时关闭 createUpdaterArtifacts，照常产出安装包，只是这一版不会出现在应用内更新里
+      - name: 配置应用内更新签名
+        env:
+          SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if [ -z "$SIGNING_KEY" ]; then
+            echo "::warning::未配置 TAURI_SIGNING_PRIVATE_KEY，本次不生成应用内更新包"
+            node -e '
+              const fs = require("fs");
+              const file = "backend/tauri.conf.json";
+              const conf = JSON.parse(fs.readFileSync(file, "utf8"));
+              conf.bundle.createUpdaterArtifacts = false;
+              fs.writeFileSync(file, JSON.stringify(conf, null, 2));
+            '
+            exit 0
+          fi
+          { echo "TAURI_SIGNING_PRIVATE_KEY<<__EOF__"; echo "$SIGNING_KEY"; echo "__EOF__"; } >> "$GITHUB_ENV"
+          # 密钥没有密码时也要显式给空串，否则签名时会等待输入密码
+          echo "TAURI_SIGNING_PRIVATE_KEY_PASSWORD=$SIGNING_KEY_PASSWORD" >> "$GITHUB_ENV"
+          echo "已启用应用内更新签名"
+
       - name: 构建安装包
         env:
           # 打包 AppImage 的工具本身也是 AppImage，CI 中没有 FUSE，改为解压后运行
           APPIMAGE_EXTRACT_AND_RUN: 1
         run: pnpm tauri build ${{ matrix.args }}
+
+      # 两个 macOS 架构的更新包同名（port-helper.app.tar.gz），合并进 Release 前按架构改名，
+      # 例如 port-helper_0.1.5_aarch64.app.tar.gz；签名只针对文件内容，改名不影响校验
+      - name: 按架构重命名 macOS 更新包
+        if: runner.os == 'macOS'
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          shopt -s nullglob
+          for f in backend/target/*-apple-darwin/release/bundle/macos/*.app.tar.gz backend/target/*-apple-darwin/release/bundle/macos/*.app.tar.gz.sig; do
+            triple=$(echo "$f" | cut -d/ -f3)
+            name=$(basename "$f")
+            mv "$f" "$(dirname "$f")/${name/.app.tar.gz/_${VERSION}_${triple%%-*}.app.tar.gz}"
+          done
 
       - uses: actions/upload-artifact@v7
         with:
@@ -218,10 +255,14 @@ jobs:
           if-no-files-found: error
           path: |
             backend/target/**/release/bundle/nsis/*.exe
+            backend/target/**/release/bundle/nsis/*.exe.sig
+            backend/target/**/release/bundle/macos/*.app.tar.gz
+            backend/target/**/release/bundle/macos/*.app.tar.gz.sig
             backend/target/**/release/bundle/dmg/*.dmg
             backend/target/**/release/bundle/deb/*.deb
             backend/target/**/release/bundle/rpm/*.rpm
             backend/target/**/release/bundle/appimage/*.AppImage
+            backend/target/**/release/bundle/appimage/*.AppImage.sig
 
   release:
     needs: [version, test, build]
@@ -238,6 +279,16 @@ jobs:
           pattern: bundle-*
           path: dist
           merge-multiple: true
+
+      # 应用内更新清单：更新说明取上一个版本以来的提交标题（不含自动发版提交）
+      - name: 生成应用内更新清单
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          previous=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -vx "v$VERSION" | head -n1)
+          range=${previous:+$previous..}$GITHUB_SHA
+          git log --no-merges --format='- %s' "$range" | grep -v '\[skip ci\]' | head -n 20 > "$RUNNER_TEMP/notes.md" || true
+          node scripts/make-update-manifest.mjs dist "$VERSION" "$GITHUB_REPOSITORY" "$RUNNER_TEMP/notes.md"
 
       - name: 提交版本号并发布 Release
         env:

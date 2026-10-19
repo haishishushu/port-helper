@@ -55,3 +55,16 @@ export function formatUptime(startMs: number, now = Date.now()) {
   if (hours > 0) return `已运行 ${hours} 小时 ${mins} 分`;
   return `已运行 ${mins} 分`;
 }
+
+/** 字节数：按量级选单位，保留一位小数（更新下载进度） */
+export function formatBytes(n: number) {
+  if (n < 1024) return `${Math.max(0, Math.round(n))} B`;
+  const units = ["KB", "MB", "GB"];
+  let v = n / 1024;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v.toFixed(1)} ${units[i]}`;
+}

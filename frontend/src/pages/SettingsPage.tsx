@@ -1,6 +1,6 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { isTauri } from "@tauri-apps/api/core";
-import { Check, Minus, Plus, Shield, Trash2 } from "lucide-react";
+import { Check, CircleArrowUp, LoaderCircle, Minus, Plus, RefreshCw, Shield, Trash2 } from "lucide-react";
 import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { TitleBar } from "@/components/layout/TitleBar";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,8 @@ import { Switch } from "@/components/ui/switch";
 import { usePrivilege } from "@/hooks/use-privilege";
 import { useRelaunchAdmin } from "@/hooks/use-relaunch";
 import { useSettings } from "@/hooks/use-settings";
+import { inFlow, phaseLabel, useUpdate } from "@/hooks/use-update";
+import { toAppError } from "@/lib/api";
 import { notify } from "@/lib/notify";
 import { CLOSE_TIMEOUT_RANGE, type ThemeMode } from "@/lib/settings";
 import { cn } from "@/lib/utils";
@@ -95,6 +97,64 @@ function Row({ label, desc, children, first }: { label: string; desc?: string; c
       </div>
       {children}
     </div>
+  );
+}
+
+/** 版本与更新：发现新版本后按钮变为“更新到 vX”，点击下载并打开进度框；与左上角的更新按钮共用状态。 */
+function VersionRow({ version }: { version: string }) {
+  const { settings } = useSettings();
+  const { phase, info, progress, checkNow, openUpdate, skip } = useUpdate();
+  const current = `port-helper ${version || "—"}`;
+
+  const check = () =>
+    checkNow()
+      .then((found) => (found ? notify.info("发现新版本，可在此处或左上角更新") : notify.success("当前已是最新版本")))
+      .catch((err) => notify.error(toAppError(err).message));
+
+  let control: ReactNode;
+  if (info && inFlow(phase)) {
+    const busy = phase === "downloading" || phase === "installing";
+    control = (
+      <Button variant="success" onClick={openUpdate}>
+        {busy ? <LoaderCircle className="animate-spin" /> : <CircleArrowUp />}
+        {phaseLabel(phase, progress)}
+      </Button>
+    );
+  } else if (info) {
+    const next = info.availableVersion;
+    control = (
+      <div className="flex items-center gap-3">
+        {next !== settings.skippedVersion && (
+          <button
+            onClick={() => {
+              skip();
+              notify.success(`已跳过 v${next}，有更新的版本时仍会提示`);
+            }}
+            className="text-[12.5px] text-fg-3 transition-colors hover:text-fg"
+          >
+            跳过此版本
+          </button>
+        )}
+        <Button variant="success" onClick={openUpdate}>
+          <CircleArrowUp />
+          更新到 v{next}
+        </Button>
+      </div>
+    );
+  } else {
+    const checking = phase === "checking";
+    control = (
+      <Button variant="success" onClick={check} disabled={checking}>
+        {checking ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}
+        {checking ? "检查中…" : "检查更新"}
+      </Button>
+    );
+  }
+
+  return (
+    <Row label="版本" desc={info ? `${current} · 发现新版本 v${info.availableVersion}` : `${current} · ${platform.label}`}>
+      {control}
+    </Row>
   );
 }
 
@@ -211,9 +271,7 @@ export function SettingsPage() {
                   </Button>
                 )}
               </Row>
-              <Row label="版本" desc={`port-helper ${version || "—"}`}>
-                <span className="font-mono text-xs text-fg-3">{platform.label}</span>
-              </Row>
+              <VersionRow version={version} />
             </div>
           </Section>
         </div>
