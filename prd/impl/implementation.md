@@ -294,7 +294,7 @@ idle
 
 ### 7.5 标题栏
 
-`decorations: false`；`TitleBar` 用 `data-tauri-drag-region` 拖动，按钮调用 `getCurrentWindow().hide() / toggleMaximize() / close()`（最小化与关闭都隐藏到托盘，关闭由后端拦截 `CloseRequested`；`Win+↓`、点任务栏图标等系统最小化由后端在 `Resized` 中检测到最小化后隐藏）；capabilities 只开放这几项窗口权限和 `store:default`。
+`decorations: false`；`TitleBar` 用 `data-tauri-drag-region` 拖动，按钮调用 `getCurrentWindow().hide() / toggleMaximize() / close()`（最小化与关闭都隐藏到托盘，关闭由后端拦截 `CloseRequested`；`Win+↓`、点任务栏图标等系统最小化由后端在 `Resized` 中检测到最小化后先 `minimize()` 同步 tao 的最小化标志再隐藏，避免 Win+D 这类不经 `SC_MINIMIZE` 的最小化把还原位置写成屏幕外坐标）；capabilities 只开放这几项窗口权限和 `store:default`。
 
 ## 8. 测试与验证
 

@@ -47,6 +47,10 @@ pub fn run() {
             }
             // 系统层面的最小化（Win+↓、点任务栏图标等）同样隐藏到托盘，与标题栏的最小化按钮一致
             (tray::MAIN_WINDOW, WindowEvent::Resized(_)) if window.is_minimized().unwrap_or(false) => {
+                // Win+D 等不经 SC_MINIMIZE 的最小化不会更新 tao 内部的最小化标志，此时直接隐藏，
+                // tao 会把去掉 WS_MINIMIZE 的样式写回窗口，系统随之把最小化停车位 (-32000, -32000)
+                // 记成还原位置，之后从托盘恢复只会恢复到屏幕外。先 minimize() 让 tao 按真实状态同步标志
+                let _ = window.minimize();
                 tray::hide_main(window);
             }
             // 托盘菜单点到别处即收起，与系统菜单行为一致
