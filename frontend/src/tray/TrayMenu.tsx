@@ -1,5 +1,5 @@
 import { AppWindow, PlugZap, Power, type LucideIcon } from "lucide-react";
-import { useEffect, useRef, type KeyboardEvent } from "react";
+import { useEffect, useRef } from "react";
 import { api } from "@/lib/api";
 import { darkQuery, loadSettings, onThemeChange, resolveTheme, type ThemeMode } from "@/lib/settings";
 import { cn } from "@/lib/utils";
@@ -51,21 +51,26 @@ export function TrayMenu() {
     return () => window.removeEventListener("blur", onBlur);
   }, []);
 
-  const onKeyDown = (e: KeyboardEvent) => {
-    if (e.key === "Escape") {
-      void api.trayHideMenu();
-      return;
-    }
-    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
-    e.preventDefault();
-    const items = Array.from(listRef.current?.querySelectorAll("button") ?? []);
-    const i = items.indexOf(document.activeElement as HTMLButtonElement);
-    const next = e.key === "ArrowDown" ? (i + 1) % items.length : (i <= 0 ? items.length : i) - 1;
-    items[next]?.focus();
-  };
+  // 键盘监听挂在 window 上：菜单弹出时焦点在 body，挂在菜单容器上的 onKeyDown 收不到按键
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        void api.trayHideMenu();
+        return;
+      }
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      e.preventDefault();
+      const items = Array.from(listRef.current?.querySelectorAll("button") ?? []);
+      const i = items.indexOf(document.activeElement as HTMLButtonElement);
+      const next = e.key === "ArrowDown" ? (i + 1) % items.length : (i <= 0 ? items.length : i) - 1;
+      items[next]?.focus();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   return (
-    <div role="menu" aria-label="port-helper" onKeyDown={onKeyDown} className="flex h-full flex-col bg-surface p-1.5">
+    <div role="menu" aria-label="port-helper" className="flex h-full flex-col bg-surface p-1.5">
       <div className="flex h-9 shrink-0 items-center gap-[9px] px-2.5">
         <span className="flex size-5 items-center justify-center rounded-[6px] bg-ink">
           <PlugZap className="size-3 text-on-ink" />

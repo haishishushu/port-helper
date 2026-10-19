@@ -19,6 +19,11 @@ use crate::process;
 const MIN_CLOSE_TIMEOUT_MS: u32 = 1_000;
 const MAX_CLOSE_TIMEOUT_MS: u32 = 60_000;
 
+/// 等待进程退出（以管理员身份重新启动时等旧实例退出）；无法查询时视为已退出，不阻塞启动。
+pub fn wait_exited(pid: u32, timeout: Duration) -> bool {
+    sys::wait_exit(pid, timeout).unwrap_or(true)
+}
+
 /// 操作前的最终安全校验：保护进程、关键进程确认、PID 复用校验。
 /// 只读取目标进程的名称与启动时间，不加载全量进程快照和服务表（prd/todo/perf-todo.md P1-5）。
 pub fn guard(pid: u32, expected_start: u64, confirm_critical: bool) -> AppResult<()> {

@@ -29,6 +29,8 @@ pub fn run() {
 
     let log_level = if cfg!(debug_assertions) { log::LevelFilter::Debug } else { log::LevelFilter::Info };
     tauri::Builder::default()
+        // 单实例必须最先注册：关闭只是隐藏到托盘，再次打开程序时唤出已有窗口，而不是启动第二个进程
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| tray::show_main(app)))
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(log_level)
@@ -48,16 +50,13 @@ pub fn run() {
                 api.prevent_close();
                 tray::hide_main(window);
             }
-            // 系统层面的最小化（Win+↓、点任务栏图标等）同样隐藏到托盘，与标题栏的最小化按钮一致
-            (tray::MAIN_WINDOW, WindowEvent::Resized(_)) if window.is_minimized().unwrap_or(false) => {
-                // Win+D 等不经 SC_MINIMIZE 的最小化不会更新 tao 内部的最小化标志，此时直接隐藏，
-                // tao 会把去掉 WS_MINIMIZE 的样式写回窗口，系统随之把最小化停车位 (-32000, -32000)
-                // 记成还原位置，之后从托盘恢复只会恢复到屏幕外。先 minimize() 让 tao 按真实状态同步标志
-                let _ = window.minimize();
-                tray::hide_main(window);
-            }
             // 托盘菜单点到别处即收起，与系统菜单行为一致
             (tray::MENU_WINDOW, WindowEvent::Focused(false)) => {
+                let _ = window.hide();
+            }
+            // 托盘菜单获得焦点时按 Alt+F4 只收起不销毁：销毁后重建期间“已就绪”标记会失真，右键会弹出未加载的页面
+            (tray::MENU_WINDOW, WindowEvent::CloseRequested { api, .. }) => {
+                api.prevent_close();
                 let _ = window.hide();
             }
             _ => {}

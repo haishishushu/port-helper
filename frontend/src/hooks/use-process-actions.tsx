@@ -48,7 +48,15 @@ export function useProcessActions({ onSettled, onRequery }: { onSettled: (s: Set
   /** 立即释放端口时的待关闭队列 */
   const release = useRef<{ port: number; queue: ActionTarget[]; closed: ActionTarget[] } | null>(null);
 
+  /** 强制结束进行中：防止连点重复发起，重复请求会让前一次的成功结果被丢弃 */
+  const killing = useRef(false);
+
   const fail = (err: AppError, target: ActionTarget, op: "close" | "kill") => {
+    // 释放端口时目标已先退出（如随同一终端的父进程一起结束），视为已释放，继续处理队列
+    if (release.current && err.code === "PROCESS_NOT_FOUND") {
+      succeeded(op === "close" ? "closed" : "killed", target);
+      return;
+    }
     release.current = null;
     setStep(null);
     if (err.code === "CRITICAL_CONFIRM_REQUIRED") {
@@ -92,6 +100,8 @@ export function useProcessActions({ onSettled, onRequery }: { onSettled: (s: Set
   };
 
   const kill = async (target: ActionTarget, critical: boolean) => {
+    if (killing.current) return;
+    killing.current = true;
     const my = ++token.current;
     setBusy(true);
     try {
@@ -103,6 +113,7 @@ export function useProcessActions({ onSettled, onRequery }: { onSettled: (s: Set
     } catch (err) {
       if (my === token.current) fail(toAppError(err), target, "kill");
     } finally {
+      killing.current = false;
       setBusy(false);
     }
   };

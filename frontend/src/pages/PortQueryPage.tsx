@@ -70,7 +70,10 @@ export function PortQueryPage({ active, request, onShowAllPorts }: {
   const lastResult = useRef<PortQueryResult | null>(null);
 
   useEffect(() => {
-    if (loaded) setIncludeAll(!settings.listenOnly);
+    if (!loaded) return;
+    setIncludeAll(!settings.listenOnly);
+    // 在设置页改了默认值：已有结果按新值重新查询，避免状态标签与列表不一致
+    if (port != null) void run(port, !settings.listenOnly);
   }, [loaded, settings.listenOnly]);
 
   const run = useCallback(
@@ -106,6 +109,12 @@ export function PortQueryPage({ active, request, onShowAllPorts }: {
   /** 操作完成后重新查询，并根据端口是否真正释放给出提示。 */
   const reportAfterAction = (after: Settled, r: PortQueryResult) => {
     const still = occupants(r);
+    // 强制结束后进程仍在退出（kill 已提示“仍在退出中”），不能再说成“端口又被占用”
+    const operated = after.action === "released" ? after.closed : [after.target];
+    if (still.some((g) => operated.some((t) => t.process.pid === g.process.pid))) {
+      setReleased(null);
+      return;
+    }
     const name =
       after.action === "released" ? after.closed.map((t) => t.process.appName).join("、") : after.target.process.appName;
     if (still.length === 0) {

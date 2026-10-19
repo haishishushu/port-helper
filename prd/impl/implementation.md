@@ -223,6 +223,8 @@ interface AppError { code: ErrorCode; message: string }
 ```text
 校验身份/保护规则
   ├─ 进程有可见顶层窗口 → 对每个窗口 PostMessage(WM_CLOSE)       method = windowClose
+  │         （跳过控制台宿主代建的 PseudoConsoleWindow / ConsoleWindowClass；
+  │          消息全部被 UIPI 拒绝时直接返回 ACCESS_DENIED）
   ├─ 否则 → 启动辅助进程 `port-helper.exe --ctrl-c <pid>`        method = consoleCtrlC
   │         （DETACHED_PROCESS，无控制台；AttachConsole(pid) → 屏蔽自身 Ctrl 处理
   │          → GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0) → 退出码 0 表示已发送）
@@ -234,12 +236,13 @@ interface AppError { code: ErrorCode; message: string }
 - `CTRL_C_EVENT` 会发给同一控制台上的全部进程，效果等同于用户在该终端按 Ctrl+C。
 - `timeoutMs` 由设置项决定（默认 5000，限制 1000–60000）。
 
-**强制结束**：`OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE)` → `TerminateProcess` → 等待最多 3 秒确认退出；`ERROR_ACCESS_DENIED` → `ACCESS_DENIED`。
+**强制结束**：`OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE)` → `TerminateProcess` → 等待最多 3 秒确认退出；`ERROR_ACCESS_DENIED` → `ACCESS_DENIED`（进程恰好正在退出时 TerminateProcess 也会拒绝访问，此时句柄已触发，按已退出返回）。
 
 ### 6.5 权限（privilege.rs）
 
 - `get_privilege`：`OpenProcessToken` + `GetTokenInformation(TokenElevation)`。
 - `relaunch_as_admin`：`ShellExecuteW("runas", 当前 exe)`；返回值 `SE_ERR_ACCESSDENIED`(5) 视为用户取消 UAC → `UAC_CANCELLED`；成功后 `app.exit(0)`。
+- 单实例：`tauri-plugin-single-instance` 最先注册，再次打开程序时唤出已有窗口（`tray::show_main`）。以管理员身份重新启动时给新实例传 `--wait-exit <旧 PID>`，新实例在 `main` 中先等旧实例退出（最多 10 秒）再初始化，避免被单实例检查当成重复启动。
 
 ### 6.6 内存与运行时
 
@@ -314,7 +317,7 @@ idle
 
 ### 7.6 标题栏
 
-`decorations: false`；`TitleBar` 用 `data-tauri-drag-region` 拖动，按钮调用 `getCurrentWindow().hide() / toggleMaximize() / close()`（最小化与关闭都隐藏到托盘，关闭由后端拦截 `CloseRequested`；`Win+↓`、点任务栏图标等系统最小化由后端在 `Resized` 中检测到最小化后先 `minimize()` 同步 tao 的最小化标志再隐藏，避免 Win+D 这类不经 `SC_MINIMIZE` 的最小化把还原位置写成屏幕外坐标）；capabilities 只开放这几项窗口权限和 `store:default`。
+`decorations: false`；`TitleBar` 用 `data-tauri-drag-region` 拖动，按钮调用 `getCurrentWindow().minimize() / toggleMaximize() / close()`（最小化是普通最小化，窗口留在任务栏；只有关闭隐藏到托盘，由后端拦截 `CloseRequested`。不再在 `Resized` 中把系统最小化转成隐藏：Win+D 这类不经 `SC_MINIMIZE` 的最小化会让 tao 的最小化标志失真，隐藏时把还原位置写成屏幕外坐标）；capabilities 只开放这几项窗口权限和 `store:default`。
 
 ## 8. 测试与验证
 

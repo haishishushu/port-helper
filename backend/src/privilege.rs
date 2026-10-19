@@ -7,6 +7,23 @@ use crate::error::{AppError, ErrorCode};
 /// 提示文案里的权限称呼
 pub const ADMIN_TERM: &str = if cfg!(target_os = "linux") { "root" } else { "管理员" };
 
+/// 以管理员身份重新启动时传给新实例的参数：`--wait-exit <旧实例 PID>`。
+/// 新实例先等旧实例退出再初始化，否则会被单实例检查当成重复启动，唤出即将退出的旧窗口后自己退出。
+pub const WAIT_EXIT_FLAG: &str = "--wait-exit";
+const WAIT_EXIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+fn wait_exit_pid(args: &[String]) -> Option<u32> {
+    args.windows(2).find(|w| w[0] == WAIT_EXIT_FLAG).and_then(|w| w[1].parse().ok())
+}
+
+/// 在 main 中、启动界面之前调用：带有 `--wait-exit` 参数时等旧实例退出（最多 10 秒）。
+pub fn wait_for_previous_instance() {
+    let args: Vec<String> = std::env::args().collect();
+    if let Some(pid) = wait_exit_pid(&args) {
+        crate::ops::wait_exited(pid, WAIT_EXIT_TIMEOUT);
+    }
+}
+
 fn cancelled() -> AppError {
     AppError::new(ErrorCode::UacCancelled, "已取消提升权限，继续以普通权限运行")
 }
@@ -56,8 +73,10 @@ mod windows_impl {
     pub fn relaunch_as_admin() -> AppResult<()> {
         let exe = std::env::current_exe().map_err(|e| AppError::internal(e.to_string()))?;
         let wide: Vec<u16> = exe.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+        let params: Vec<u16> =
+            format!("{} {}", super::WAIT_EXIT_FLAG, std::process::id()).encode_utf16().chain(std::iter::once(0)).collect();
         let result = unsafe {
-            ShellExecuteW(None, w!("runas"), PCWSTR(wide.as_ptr()), PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL)
+            ShellExecuteW(None, w!("runas"), PCWSTR(wide.as_ptr()), PCWSTR(params.as_ptr()), PCWSTR::null(), SW_SHOWNORMAL)
         };
         let code = result.0 as isize;
         match code {
@@ -88,7 +107,7 @@ fn relaunch_target() -> AppResult<String> {
 #[cfg(target_os = "macos")]
 pub fn relaunch_as_admin() -> AppResult<()> {
     let exe = relaunch_target()?;
-    let shell = format!("'{}' > /dev/null 2>&1 &", exe.replace('\'', r"'\''"));
+    let shell = format!("'{}' {WAIT_EXIT_FLAG} {} > /dev/null 2>&1 &", exe.replace('\'', r"'\''"), std::process::id());
     let script = format!(
         "do shell script \"{}\" with administrator privileges",
         shell.replace('\\', r"\\").replace('"', "\\\"")
@@ -128,7 +147,8 @@ pub fn relaunch_as_admin() -> AppResult<()> {
             }
         }
     }
-    cmd.args(["sh", "-c", "nohup \"$0\" > /dev/null 2>&1 &", exe.as_str()]);
+    let pid = std::process::id().to_string();
+    cmd.args(["sh", "-c", "nohup \"$0\" \"$1\" \"$2\" > /dev/null 2>&1 &", exe.as_str(), WAIT_EXIT_FLAG, &pid]);
     let status = match cmd.status() {
         Ok(status) => status,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -144,5 +164,26 @@ pub fn relaunch_as_admin() -> AppResult<()> {
         // 126：用户关闭了认证框；127：认证失败或未获授权
         Some(126) | Some(127) => Err(cancelled()),
         code => Err(AppError::new(ErrorCode::SystemApiFailed, format!("pkexec 退出码 {code:?}"))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{wait_exit_pid, WAIT_EXIT_FLAG};
+
+    fn args(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn wait_exit_pid_reads_flag_value() {
+        assert_eq!(wait_exit_pid(&args(&["port-helper.exe", WAIT_EXIT_FLAG, "1234"])), Some(1234));
+    }
+
+    #[test]
+    fn wait_exit_pid_ignores_missing_or_invalid_value() {
+        assert_eq!(wait_exit_pid(&args(&["port-helper.exe"])), None);
+        assert_eq!(wait_exit_pid(&args(&["port-helper.exe", WAIT_EXIT_FLAG])), None);
+        assert_eq!(wait_exit_pid(&args(&["port-helper.exe", WAIT_EXIT_FLAG, "abc"])), None);
     }
 }

@@ -38,7 +38,7 @@ function useRemainingSeconds(deadline: number) {
   return remain;
 }
 
-function ClosingDialog({ step, h }: { step: Extract<Step, { kind: "closing" }>; h: ActionHandlers }) {
+function ClosingDialog({ step, busy, h }: { step: Extract<Step, { kind: "closing" }>; busy: boolean; h: ActionHandlers }) {
   const remain = useRemainingSeconds(step.deadline);
   // 进度条用一次性 CSS 动画（transform，走合成层），负的 delay 让重新挂载时从当前进度接着走
   const [totalMs] = useState(() => step.timeoutSec * 1000);
@@ -61,8 +61,8 @@ function ClosingDialog({ step, h }: { step: Extract<Step, { kind: "closing" }>; 
       description={`已请求 ${t.process.name}（PID ${t.process.pid}）自行退出，等待中……`}
       rows={rows}
       actions={
-        <Button variant="danger" onClick={() => h.forceNow(t, step.critical)}>
-          <Zap />
+        <Button variant="danger" disabled={busy} onClick={() => h.forceNow(t, step.critical)}>
+          {busy ? <LoaderCircle className="animate-spin" /> : <Zap />}
           立即强制结束
         </Button>
       }
@@ -138,7 +138,7 @@ function CommandLine({ text }: { text: string }) {
   );
 }
 
-function ForwarderDialog({ step, h }: { step: Extract<Step, { kind: "forwarder" }>; h: ActionHandlers }) {
+function ForwarderDialog({ step, busy, h }: { step: Extract<Step, { kind: "forwarder" }>; busy: boolean; h: ActionHandlers }) {
   const t = step.target;
   const wsl = t.process.name.toLowerCase().startsWith("wsl");
   const port = t.port ?? "<端口>";
@@ -159,8 +159,8 @@ function ForwarderDialog({ step, h }: { step: Extract<Step, { kind: "forwarder" 
           <Button variant="outline" onClick={h.cancel} autoFocus>
             取消
           </Button>
-          <Button variant="danger" onClick={() => h.confirmForwarderKill(t)}>
-            <Zap />
+          <Button variant="danger" disabled={busy} onClick={() => h.confirmForwarderKill(t)}>
+            {busy ? <LoaderCircle className="animate-spin" /> : <Zap />}
             仍要强制结束
           </Button>
         </>
@@ -218,7 +218,7 @@ export function ProcessActionDialogs({ step, busy, handlers: h }: { step: Step |
       );
     }
     case "closing":
-      return <ClosingDialog step={step} h={h} />;
+      return <ClosingDialog step={step} busy={busy} h={h} />;
     case "closeTimeout": {
       const t = step.target;
       return (
@@ -276,7 +276,7 @@ export function ProcessActionDialogs({ step, busy, handlers: h }: { step: Step |
     case "critical":
       return <CriticalDialog key={step.target.process.pid} step={step} h={h} />;
     case "forwarder":
-      return <ForwarderDialog step={step} h={h} />;
+      return <ForwarderDialog step={step} busy={busy} h={h} />;
     case "release":
       return (
         <ConfirmDialog

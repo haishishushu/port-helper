@@ -34,7 +34,7 @@ const TEXT: Record<Os, PlatformText> = {
     elevatePrompt: "Windows 会弹出“用户账户控制”请求确认。",
     elevateReason: "当前为普通权限。结束服务或 SYSTEM 进程需要管理员权限",
     closeSignal: "发送关闭信号（窗口关闭 / Ctrl+C）",
-    closeHow: "有窗口的发送关闭消息，控制台进程发送 Ctrl+C",
+    closeHow: "有窗口的发送关闭消息，控制台进程发送 Ctrl+C，相当于在它所在的终端按 Ctrl+C，同一终端里的其他进程也会收到",
     criticalTitle: "这是 Windows 关键进程",
     serviceTag: "Windows 服务",
     serviceHint: (s) => `这是 Windows 服务 ${s.join("、")}，建议在“服务”中停止。`,

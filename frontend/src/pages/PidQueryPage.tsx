@@ -86,7 +86,8 @@ export function PidQueryPage({ active, request, onGotoPort }: {
   /** 写入输入框（快捷端口、跳转、返回主页、提交成功后同步紧凑输入框） */
   const fill = (value: string) => setSeed((s) => ({ value, nonce: s.nonce + 1 }));
   const [inputError, setInputError] = useState<string | null>(null);
-  const [includeAll, setIncludeAll] = useState(false);
+  // 首次挂载可能直接带着跳转请求查询，初值就要按设置来，不能等下面的 effect
+  const [includeAll, setIncludeAll] = useState(() => !settings.listenOnly);
   const [pid, setPid] = useState<number | null>(null);
   const [result, setResult] = useState<PidQueryResult | null>(null);
   const [error, setError] = useState<AppError | null>(null);
@@ -98,7 +99,10 @@ export function PidQueryPage({ active, request, onGotoPort }: {
   const lastResult = useRef<PidQueryResult | null>(null);
 
   useEffect(() => {
-    if (loaded) setIncludeAll(!settings.listenOnly);
+    if (!loaded) return;
+    setIncludeAll(!settings.listenOnly);
+    // 在设置页改了默认值：已有结果按新值重新查询，避免状态标签与列表不一致
+    if (pid != null) void run(pid, !settings.listenOnly);
   }, [loaded, settings.listenOnly]);
 
   const run = async (target: number, all: boolean, refresh = false) => {
